@@ -8,7 +8,7 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="Check list SD">
+    <meta name="apple-mobile-web-app-title" content="SD Checklist">
     <link rel="apple-touch-icon" href="apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
     <script src="https://cdn.tailwindcss.com"></script>
@@ -1836,9 +1836,9 @@
     </div>
 <script type="module">
 // --- CONFIGURATION & CONSTANTS ---
-const STORAGE_KEY = 'interactive_SU_WorkInstruction_v1';
-const SETTINGS_KEY = 'interactiveWorkInstruction_settings_SU_v1';
-const API_KEY_STORAGE_KEY = 'interactiveWorkInstruction_apiKey_SU_v1';
+const STORAGE_KEY = 'interactive_SD_WorkInstruction_v1';
+const SETTINGS_KEY = 'interactiveWorkInstruction_settings_SD_v1';
+const API_KEY_STORAGE_KEY = 'interactiveWorkInstruction_apiKey_SD_v1';
 const NOTIFICATION_LEAD_TIME_MINUTES = 5;
 const AUTO_SCROLL_DELAY_MS = 60000; // 1 minute delay for auto-scrolling
 const IDLE_SCROLL_DELAY_MS = 20000; // 20 seconds for idle scroll
@@ -1937,7 +1937,7 @@ const INITIAL_TASKS_JSON = `
  */
 const STORAGE_ENGINE = (() => {
     'use strict';
-    const DB_NAME = 'interactive_SU_DB_mobile';
+    const DB_NAME = 'interactive_SD_DB_mobile';
     const DB_VERSION = 1;
     const STORE = 'appstore';
     let _db = null;
