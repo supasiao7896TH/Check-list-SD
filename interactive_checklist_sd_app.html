@@ -2,6 +2,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Check list SD (AI Enhanced)</title>
+    <link rel="manifest" href="manifest.webmanifest">
+    <meta name="theme-color" content="#2563eb">
+    <link rel="apple-touch-icon" href="apple-touch-icon.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Chart.js for Dashboard -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -2596,7 +2599,7 @@
                         .join('\n');
 
                     const prompt = `
-                        Act as an expert Petrochemical Plant Start-Up Manager. Analyze the following real-time project status data and provide a concise, professional summary in Thai.
+                        Act as an expert Petrochemical Plant Shut-Down Manager. Analyze the following real-time project status data and provide a concise, professional summary in Thai.
                         
                         **Current Project Data:**
                         - Overall Progress: ${dashboardMetrics.overallProgress}%
@@ -2639,6 +2642,12 @@
 
         App.init();
     });
+</script>
+<script>
+    /* PWA: register service worker (shared with mobile version) */
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+    }
 </script>
 
 
