@@ -12,6 +12,12 @@
     <link rel="apple-touch-icon" href="apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        // Light-only app: use class-based dark mode so `dark:` color classes in
+        // task/subtask data never trigger from the phone's OS dark theme
+        // (otherwise dark-mode colors render on the white UI and look faint).
+        tailwind.config = { darkMode: 'class' };
+    </script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">

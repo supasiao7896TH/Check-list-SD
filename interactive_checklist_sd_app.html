@@ -6,6 +6,12 @@
     <meta name="theme-color" content="#2563eb">
     <link rel="apple-touch-icon" href="apple-touch-icon.png">
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        // Light-only app: use class-based dark mode so `dark:` color classes in
+        // task/subtask data never trigger from the OS dark theme
+        // (otherwise dark-mode colors render on the white UI and look faint).
+        tailwind.config = { darkMode: 'class' };
+    </script>
     <!-- Chart.js for Dashboard -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
