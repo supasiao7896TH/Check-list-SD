@@ -1,5 +1,5 @@
 /* Service Worker — Check list SD (mobile PWA) */
-const CACHE = 'sd-checklist-v1';
+const CACHE = 'sd-checklist-v2';
 const SHELL = [
   './',
   './interactive_checklist_sd_mobile.html',
