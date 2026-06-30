@@ -2390,11 +2390,20 @@ const App = {
         );
     },
 
+    _mergeMissingDefaultTasks(loadedTasks) {
+        const existingIds = new Set(loadedTasks.filter(t => t && t.id).map(t => t.id));
+        const missingTasks = this.getDefaultTasks().filter(t => !existingIds.has(t.id));
+        if (missingTasks.length === 0) return loadedTasks;
+        console.info(`Restoring ${missingTasks.length} missing default task(s) from checklist template.`);
+        return [...loadedTasks, ...missingTasks];
+    },
+
     async loadTasks() {
         try {
             const stored = await STORAGE_ENGINE.get('tasks');
             const hasStored = Array.isArray(stored);
-            let loadedTasks = hasStored ? stored : this.getDefaultTasks();
+            const loadedTasks = hasStored ? this._mergeMissingDefaultTasks(stored) : this.getDefaultTasks();
+            const needsSave = !hasStored || loadedTasks.length !== stored.length;
             // NEW: Added properties for actual times
             this.tasks = loadedTasks.map(task => ({
                 ...task,
@@ -2412,7 +2421,7 @@ const App = {
             }));
             this.sortTasks();
             this.resetAllNotifications();
-            if (!hasStored) await this.saveTasks(); // persist freshly-loaded defaults
+            if (needsSave) await this.saveTasks(); // persist freshly-loaded or merged defaults
         } catch (error) {
             console.error("Error loading tasks:", error);
             this.showNotification('Error loading data.', 'error');

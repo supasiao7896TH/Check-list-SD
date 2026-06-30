@@ -1085,10 +1085,20 @@
                 }).filter(Boolean);
             },
 
+            _mergeMissingDefaultTasks(loadedTasks) {
+                if (!Array.isArray(loadedTasks)) return loadedTasks;
+                const existingIds = new Set(loadedTasks.filter(t => t && t.id).map(t => t.id));
+                const missingTasks = this.getDefaultTasks().filter(t => !existingIds.has(t.id));
+                if (missingTasks.length === 0) return loadedTasks;
+                console.info(`Restoring ${missingTasks.length} missing default task(s) from checklist template.`);
+                return [...loadedTasks, ...missingTasks];
+            },
+
             loadTasks() {
                 try {
                     const tasksJSON = localStorage.getItem(this.STORAGE_KEY);
                     let loadedTasks = tasksJSON ? JSON.parse(tasksJSON) : this.getDefaultTasks();
+                    if (tasksJSON) loadedTasks = this._mergeMissingDefaultTasks(loadedTasks);
 
                     this.tasks = this._sanitizeTasks(loadedTasks);
 
