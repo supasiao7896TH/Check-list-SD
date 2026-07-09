@@ -1,5 +1,5 @@
 /* Service Worker — Check list SD (mobile PWA) */
-const CACHE = 'sd-checklist-v3';
+const CACHE = 'sd-checklist-v4';
 const SHELL = [
   './',
   './interactive_checklist_sd_mobile.html',
@@ -30,15 +30,29 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+// Cache a response only if it is a cacheable http(s) success. Skips opaque /
+// error responses (which would otherwise be served permanently by cache-first).
+function putInCache(req, res) {
+  if (res && res.ok && res.type !== 'opaque') {
+    const cp = res.clone();
+    caches.open(CACHE).then((c) => c.put(req, cp));
+  }
+  return res;
+}
+
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
+
+  // Only http(s) is cacheable — chrome-extension:, data:, etc. throw on cache.put.
+  const scheme = new URL(req.url).protocol;
+  if (scheme !== 'http:' && scheme !== 'https:') return;
 
   // App document: network-first (fresh build), fall back to cache offline.
   if (req.mode === 'navigate') {
     event.respondWith(
       fetch(req)
-        .then((res) => { const cp = res.clone(); caches.open(CACHE).then((c) => c.put(req, cp)); return res; })
+        .then((res) => putInCache(req, res))
         .catch(() => caches.match(req).then((r) => r || caches.match('./interactive_checklist_sd_mobile.html')))
     );
     return;
@@ -49,7 +63,7 @@ self.addEventListener('fetch', (event) => {
   if (new URL(req.url).pathname.includes('/shared/')) {
     event.respondWith(
       fetch(req)
-        .then((res) => { const cp = res.clone(); caches.open(CACHE).then((c) => c.put(req, cp)); return res; })
+        .then((res) => putInCache(req, res))
         .catch(() => caches.match(req))
     );
     return;
@@ -57,10 +71,8 @@ self.addEventListener('fetch', (event) => {
 
   // Everything else (incl. CDN assets): cache-first, then network + cache.
   event.respondWith(
-    caches.match(req).then((cached) => cached || fetch(req).then((res) => {
-      const cp = res.clone();
-      caches.open(CACHE).then((c) => c.put(req, cp));
-      return res;
-    }).catch(() => cached))
+    caches.match(req).then((cached) => cached || fetch(req)
+      .then((res) => putInCache(req, res))
+      .catch(() => cached))
   );
 });

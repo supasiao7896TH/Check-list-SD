@@ -793,6 +793,96 @@
 <script>
     document.addEventListener('DOMContentLoaded', () => {
 
+        /**
+         * STORAGE_ENGINE — Promise-based IndexedDB key/value wrapper.
+         * Records are stored as { k: <key>, v: <value> } in a single object store.
+         */
+        const STORAGE_ENGINE = (() => {
+            'use strict';
+            const DB_NAME = 'interactive_SD_DB_desktop';
+            const DB_VERSION = 1;
+            const STORE = 'appstore';
+            let _db = null;
+
+            function _open() {
+                if (_db) return Promise.resolve(_db);
+                return new Promise((resolve, reject) => {
+                    const req = indexedDB.open(DB_NAME, DB_VERSION);
+                    req.onupgradeneeded = (e) => {
+                        const db = e.target.result;
+                        if (!db.objectStoreNames.contains(STORE)) {
+                            db.createObjectStore(STORE, { keyPath: 'k' });
+                        }
+                    };
+                    req.onsuccess = () => { _db = req.result; resolve(_db); };
+                    req.onerror = () => reject(req.error);
+                    req.onblocked = () => console.warn('IndexedDB upgrade blocked');
+                });
+            }
+
+            function _tx(mode, fn) {
+                return _open().then(db => new Promise((resolve, reject) => {
+                    const tx = db.transaction(STORE, mode);
+                    const store = tx.objectStore(STORE);
+                    let req;
+                    try { req = fn(store); } catch (err) { reject(err); return; }
+                    tx.oncomplete = () => resolve(req ? req.result : undefined);
+                    tx.onerror = () => reject(tx.error);
+                    tx.onabort = () => reject(tx.error);
+                }));
+            }
+
+            return {
+                open: _open,
+                async get(key) {
+                    const rec = await _tx('readonly', s => s.get(key));
+                    return rec ? rec.v : undefined;
+                },
+                put(key, value) { return _tx('readwrite', s => s.put({ k: key, v: value })); },
+                delete(key) { return _tx('readwrite', s => s.delete(key)); },
+            };
+        })();
+
+        /**
+         * CRYPTO_VAULT — encrypts the Gemini API key with AES-GCM 256 using a
+         * NON-EXTRACTABLE CryptoKey stored in IndexedDB, so the raw key bytes can
+         * never be read back out. Replaces the previous plaintext localStorage.
+         */
+        const CRYPTO_VAULT = (() => {
+            'use strict';
+            const ALGO = 'AES-GCM';
+            const KEY_RECORD = 'cryptoKey';
+            const SECRET_RECORD = 'apiKeySecret';
+
+            async function _getKey() {
+                let key = await STORAGE_ENGINE.get(KEY_RECORD);
+                if (!key) {
+                    key = await crypto.subtle.generateKey({ name: ALGO, length: 256 }, false, ['encrypt', 'decrypt']);
+                    await STORAGE_ENGINE.put(KEY_RECORD, key);
+                }
+                return key;
+            }
+
+            return {
+                async setApiKey(plaintext) {
+                    const key = await _getKey();
+                    const iv = crypto.getRandomValues(new Uint8Array(12));
+                    const data = await crypto.subtle.encrypt({ name: ALGO, iv }, key, new TextEncoder().encode(plaintext));
+                    await STORAGE_ENGINE.put(SECRET_RECORD, { iv, data });
+                },
+                async getApiKey() {
+                    const rec = await STORAGE_ENGINE.get(SECRET_RECORD);
+                    if (!rec) return null;
+                    const key = await _getKey();
+                    const decrypted = await crypto.subtle.decrypt({ name: ALGO, iv: rec.iv }, key, rec.data);
+                    return new TextDecoder().decode(decrypted);
+                },
+                async clearApiKey() {
+                    await STORAGE_ENGINE.delete(SECRET_RECORD);
+                },
+            };
+        })();
+
         const App = {
             // --- CONSTANTS ---
             STORAGE_KEY: 'interactiveWorkInstruction_v8_final_sd',
@@ -851,7 +941,9 @@
             initSync() {
                 window.__SD_APP_TASKS__ = () => this.tasks;
                 window.__SD_APPLY_REMOTE__ = (mergedTasks) => {
-                    this.tasks = mergedTasks;
+                    // Remote data comes from other devices via Firestore — sanitize it
+                    // the same way locally-loaded data is before rendering.
+                    this.tasks = this._sanitizeTasks(mergedTasks);
                     this.render();
                 };
                 if (window.__SD_IDENTITY__ && window.__SD_IDENTITY__.promptRequired()) {
@@ -1090,7 +1182,7 @@
                         actualEndTime: task.actualEndTime || null,
                         notes: String(task.notes || ''),
                         responsible: String(task.responsible || ''),
-                        textColor: String(task.textColor || 'text-slate-800 dark:text-slate-200'),
+                        textColor: this.safeColorClass(task.textColor),
                         subtasks: []
                     };
 
@@ -1103,7 +1195,7 @@
                                 id: String(st.id),
                                 text: String(st.text || 'งานย่อยไม่มีชื่อ'),
                                 checked: Boolean(st.checked || false),
-                                textColor: String(st.textColor || 'text-slate-700 dark:text-slate-300')
+                                textColor: this.safeColorClass(st.textColor, 'text-slate-700 dark:text-slate-300')
                             };
                         }).filter(Boolean);
                     }
@@ -1258,7 +1350,7 @@
                     minute: '2-digit'
                 });
 
-                const descriptionClass = `text-lg font-semibold break-words ${task.textColor || 'text-slate-800 dark:text-slate-200'}`;
+                const descriptionClass = `text-lg font-semibold break-words ${this.safeColorClass(task.textColor)}`;
                 const actualTimeHTML = this._formatActualTimeRange(task.actualStartTime, task.actualEndTime);
 
                 const subtasksHTML = this.renderSubtasks(task.subtasks, task.id);
@@ -1323,11 +1415,13 @@
                     const subItemRegex = /^[\s]*[\-\*]\s/;
                     const isSubItem = subItemRegex.test(subtask.text);
                     const paddingClass = isSubItem ? 'pl-6' : '';
-                    const textColorClass = subtask.textColor || 'text-slate-700 dark:text-slate-300';
+                    const textColorClass = this.safeColorClass(subtask.textColor, 'text-slate-700 dark:text-slate-300');
+                    const subId = this.escapeHTML(subtask.id);
+                    const escTaskId = this.escapeHTML(taskId);
                     html += `
                         <div class="subtask-item flex items-start gap-3 p-2 hover:bg-slate-100 dark:hover:bg-slate-800/50 rounded-lg ${paddingClass}">
-                            <input type="checkbox" id="${subtask.id}" data-task-id="${taskId}" data-subtask-id="${subtask.id}" class="h-5 w-5 mt-1 flex-shrink-0 rounded-md border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500" ${subtask.checked ? 'checked' : ''}>
-                            <label for="${subtask.id}" class="flex-1 ${textColorClass}">${this.escapeHTML(subtask.text.replace(subItemRegex, ''))}</label>
+                            <input type="checkbox" id="${subId}" data-task-id="${escTaskId}" data-subtask-id="${subId}" class="h-5 w-5 mt-1 flex-shrink-0 rounded-md border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500" ${subtask.checked ? 'checked' : ''}>
+                            <label for="${subId}" class="flex-1 ${textColorClass}">${this.escapeHTML(subtask.text.replace(subItemRegex, ''))}</label>
                         </div>
                     `;
                 });
@@ -1549,11 +1643,15 @@
                 }
             },
 
-            handleApiKeySubmit() {
+            async handleApiKeySubmit() {
                 const key = this.dom.apiKeyInput.value.trim();
                 if (key) {
                     this.apiKey = key;
-                    localStorage.setItem(this.API_KEY_STORAGE_KEY, key);
+                    try {
+                        await CRYPTO_VAULT.setApiKey(key);
+                    } catch (e) {
+                        console.warn('[vault] setApiKey failed:', e);
+                    }
                     this.closeActiveModal();
                     this.showNotification('บันทึก API Key สำเร็จแล้ว', 'success');
                 } else {
@@ -1562,9 +1660,14 @@
             },
 
             handleClearApiKey() {
-                this.openConfirmModal('ยืนยันการล้าง API Key', 'API Key ที่บันทึกไว้จะถูกลบออก คุณจะต้องป้อนใหม่เพื่อใช้ฟังก์ชัน AI', () => {
+                this.openConfirmModal('ยืนยันการล้าง API Key', 'API Key ที่บันทึกไว้จะถูกลบออก คุณจะต้องป้อนใหม่เพื่อใช้ฟังก์ชัน AI', async () => {
                     this.apiKey = null;
                     localStorage.removeItem(this.API_KEY_STORAGE_KEY);
+                    try {
+                        await CRYPTO_VAULT.clearApiKey();
+                    } catch (e) {
+                        console.warn('[vault] clearApiKey failed:', e);
+                    }
                     this.showNotification('ล้าง API Key สำเร็จ', 'info');
                     this.closeActiveModal();
                 });
@@ -2000,8 +2103,27 @@
                 localStorage.setItem(this.SETTINGS_KEY, JSON.stringify(this.settings));
             },
 
-            loadApiKey() {
-                this.apiKey = localStorage.getItem(this.API_KEY_STORAGE_KEY);
+            async loadApiKey() {
+                try {
+                    this.apiKey = await CRYPTO_VAULT.getApiKey();
+                } catch (e) {
+                    console.warn('[vault] getApiKey failed:', e);
+                    this.apiKey = null;
+                }
+                // One-time migration: move any old plaintext key into the encrypted
+                // vault, then delete the plaintext copy from localStorage.
+                if (!this.apiKey) {
+                    const legacy = localStorage.getItem(this.API_KEY_STORAGE_KEY);
+                    if (legacy) {
+                        this.apiKey = legacy;
+                        try {
+                            await CRYPTO_VAULT.setApiKey(legacy);
+                            localStorage.removeItem(this.API_KEY_STORAGE_KEY);
+                        } catch (e) {
+                            console.warn('[vault] API key migration failed:', e);
+                        }
+                    }
+                }
             },
 
             escapeHTML(str) {
@@ -2011,6 +2133,14 @@
                     .replace(/>/g, '&gt;')
                     .replace(/"/g, '&quot;')
                     .replace(/'/g, '&#39;');
+            },
+
+            // Only allow characters valid in a CSS/Tailwind class list. Anything
+            // else (e.g. an attribute-breakout payload synced from another device)
+            // falls back to the default class, so textColor can never inject markup.
+            safeColorClass(color, fallback = 'text-slate-800 dark:text-slate-200') {
+                const s = String(color ?? '');
+                return /^[-a-zA-Z0-9:/ _]+$/.test(s) ? s : fallback;
             },
 
             getCurrentISODate() {
@@ -2573,7 +2703,7 @@
                 const timeString = taskDate.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
             
                 return `
-                    <div class="kanban-card bg-white dark:bg-slate-900/70 p-3 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 cursor-pointer hover:shadow-md hover:border-blue-500 dark:hover:border-blue-500 transition-all" data-task-id="${task.id}">
+                    <div class="kanban-card bg-white dark:bg-slate-900/70 p-3 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 cursor-pointer hover:shadow-md hover:border-blue-500 dark:hover:border-blue-500 transition-all" data-task-id="${this.escapeHTML(task.id)}">
                         <p class="font-semibold text-slate-800 dark:text-slate-200">${this.escapeHTML(task.description)}</p>
                         <div class="flex justify-between items-center mt-2 text-xs text-slate-500 dark:text-slate-400">
                             <span>${timeString}</span>

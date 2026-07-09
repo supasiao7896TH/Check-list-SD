@@ -2590,13 +2590,14 @@ const App = {
         const dateString = taskDate.toLocaleDateString('th-TH', { day: '2-digit', month: 'short', year: '2-digit' });
         const timeString = taskDate.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
 
-        const descColor = task.textColor || 'text-slate-800';
+        const descColor = this.safeColorClass(task.textColor);
+        const escTaskId = this.escapeAttr(task.id);
         const subtasksHTML = this.renderSubtasks(task.subtasks, task.id);
         const taskCompleteHTML = task.subtasks.length === 0 ? `
             <div class="m-sub">
-                <input type="checkbox" id="task-complete-${task.id}" data-task-id="${task.id}" data-task-complete="true"
+                <input type="checkbox" id="task-complete-${escTaskId}" data-task-id="${escTaskId}" data-task-complete="true"
                     class="m-cbx" ${task.completed ? 'checked' : ''}>
-                <label for="task-complete-${task.id}" class="m-sublabel m-sublabel-strong">เสร็จสิ้นงานนี้</label>
+                <label for="task-complete-${escTaskId}" class="m-sublabel m-sublabel-strong">เสร็จสิ้นงานนี้</label>
             </div>` : '';
 
         let notesHTML = '';
@@ -2668,13 +2669,16 @@ const App = {
     },
 
     renderSubtasks(subtasks, taskId) {
+        const escTaskId = this.escapeAttr(taskId);
         return subtasks.map(subtask => {
             const isSubItem = subtask.text.trim().startsWith('-');
             const indentClass = isSubItem ? 'm-indent' : '';
+            const subId = this.escapeAttr(subtask.id);
+            const subColor = this.safeColorClass(subtask.textColor, '');
             return `
             <div class="m-sub ${indentClass}">
-                <input type="checkbox" id="${subtask.id}" data-task-id="${taskId}" data-subtask-id="${subtask.id}" class="m-cbx" ${subtask.checked ? 'checked' : ''}>
-                <label for="${subtask.id}" class="m-sublabel ${subtask.textColor || ''}">${this.escapeHTML(subtask.text.replace(/^[\s]*[\-\*]\s/, ''))}</label>
+                <input type="checkbox" id="${subId}" data-task-id="${escTaskId}" data-subtask-id="${subId}" class="m-cbx" ${subtask.checked ? 'checked' : ''}>
+                <label for="${subId}" class="m-sublabel ${subColor}">${this.escapeHTML(subtask.text.replace(/^[\s]*[\-\*]\s/, ''))}</label>
             </div>
             `;
         }).join('');
@@ -3474,6 +3478,25 @@ const App = {
         const p = document.createElement('p');
         p.appendChild(document.createTextNode(str));
         return p.innerHTML;
+    },
+
+    // escapeHTML (via createTextNode) does NOT escape quotes, so it is unsafe for
+    // attribute values. Use this for anything interpolated inside an HTML attribute.
+    escapeAttr(str) {
+        return String(str ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    },
+
+    // Only allow characters valid in a CSS/Tailwind class list. Anything else
+    // (e.g. an attribute-breakout payload synced from another device) falls back
+    // to the default class, so textColor can never inject markup.
+    safeColorClass(color, fallback = 'text-slate-800') {
+        const s = String(color ?? '');
+        return /^[-a-zA-Z0-9:/ _]+$/.test(s) ? s : fallback;
     },
 
     getCurrentISODate() {
