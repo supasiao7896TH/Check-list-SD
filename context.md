@@ -23,7 +23,7 @@ Check-list-SD เป็นเว็บแอปเช็คลิสต์สำ
 | `interactive_checklist_sd_app.html` | เวอร์ชัน PC/desktop (~2,700 บรรทัด) — self-contained HTML+JS |
 | `shared/` | ES module ที่ทั้งสองเวอร์ชัน import ร่วมกัน (ดูรายละเอียดด้านล่าง) |
 | `firestore.rules` | security rules ของ Firestore (paste เข้า Firebase console เอง) |
-| `sw.js` | service worker, cache name `sd-checklist-v2`, cache app shell + `shared/*.js` |
+| `sw.js` | service worker, cache name `sd-checklist-v4` — app shell + navigate เป็น network-first, `shared/*.js` เป็น network-first (กัน config ค้าง cache), CDN/asset อื่นเป็น cache-first แต่เฉพาะ response `res.ok` และไม่ใช่ opaque เท่านั้น (กัน cache-poisoning), กรอง scheme ที่ไม่ใช่ http(s) ทิ้งก่อนแตะ Cache API |
 | `manifest.webmanifest` | PWA manifest |
 | `checklist_sd_backup_2025-10-18.json` | ข้อมูลสำรอง/seed ของ 31 task ชุด Shut-Down จริง |
 | `HANDOFF.md` | เอกสารส่งต่องานโปรเจกต์ Firebase sync + PIN protection (ประวัติ/แผน/สถานะละเอียด) |
@@ -32,10 +32,12 @@ Check-list-SD เป็นเว็บแอปเช็คลิสต์สำ
 
 ทั้งสองไฟล์ HTML เป็น **คนละชุดโค้ดที่ดูแลแยกกันโดยเจตนา** ไม่ใช่โค้ดชุดเดียวกัน:
 
-- **Mobile** เก็บข้อมูลด้วย **IndexedDB** ผ่าน wrapper เอง (`STORAGE_ENGINE`, DB name
+- **Mobile** เก็บ task ข้อมูลด้วย **IndexedDB** ผ่าน wrapper เอง (`STORAGE_ENGINE`, DB name
   `interactive_SD_DB_mobile`) และมี `CRYPTO_VAULT` เข้ารหัส Gemini API key ด้วย AES-GCM
-- **Desktop** เก็บข้อมูลด้วย **`localStorage`** ธรรมดา และเก็บ Gemini API key เป็น **plaintext**
-  (ไม่มี vault เทียบเท่า)
+- **Desktop** เก็บ task ข้อมูลด้วย **`localStorage`** ธรรมดา แต่ Gemini API key ใช้
+  `CRYPTO_VAULT`/`STORAGE_ENGINE` แบบเดียวกับ mobile แล้ว (DB name แยกกัน
+  `interactive_SD_DB_desktop`) — เดิมเก็บเป็น plaintext ใน `localStorage`, แก้แล้วพร้อม migrate
+  key เก่าอัตโนมัติตอนโหลดแอปครั้งแรกหลังอัปเดต (ดู `loadApiKey()` ใน `interactive_checklist_sd_app.html`)
 - ทั้งสองไฟล์มี global singleton `App` object ของตัวเอง จัดการ state แบบ imperative
   (mutate แล้วเรียก `this.render()` เอง ไม่มี virtual DOM/diffing)
 - มีแค่ logic ที่ cross-cutting จริงๆ (data normalization, identity, sync) เท่านั้นที่ถูกแยกไปอยู่ใน `shared/`
@@ -73,7 +75,7 @@ Task object shape (ใช้เหมือนกันทั้งสองเ�
 | ไฟล์ | หน้าที่ |
 |---|---|
 | `shared/app-core.js` | `normalizeTask`/`normalizeSubtask` (เติมฟิลด์ที่หาย), `mergeTaskLastWriteWins(local, remote)` — merge แบบ last-write-wins โดยเทียบ `updatedAt` |
-| `shared/firebase-config.js` | placeholder Firebase config object + `getFirebaseApp()` (lazy-load + memoize Firebase App singleton ผ่าน dynamic `import()` จาก CDN) + `isPlaceholderConfig()` guard |
+| `shared/firebase-config.js` | Firebase config จริงของโปรเจกต์ `t-dispatcher-465104-r2` (ไม่ใช่ placeholder แล้ว ตั้งแต่คอมมิต `a736f54`) + `getFirebaseApp()` (lazy-load + memoize Firebase App singleton ผ่าน dynamic `import()` จาก CDN) + `isPlaceholderConfig()` guard (เหลือไว้เผื่อ config ถูกรีเซ็ตกลับเป็น placeholder ในอนาคต) |
 | `shared/identity.js` | UID ของเครื่อง (`local-...`, เก็บใน `localStorage`) + ชื่อที่ผู้ใช้กรอก + `signInAnon()` (sign-in แบบ anonymous ผ่าน Firebase Auth, **ไม่ throw เด็ดขาด** — ล้มก็ยังใช้ local UID ต่อได้) |
 | `shared/sync-engine.js` | `createSyncEngine({getLocalTasks, onRemoteChange, getIdentity, collectionName})` คืนค่า `{ push(tasks) }` — ผูก Firestore `onSnapshot` (inbound, merge last-write-wins) เข้ากับ diffed batch write (outbound, เขียนเฉพาะ task ที่เปลี่ยน + ลบ task ที่หายไป), เปิด offline persistence ผ่าน `enableIndexedDbPersistence` |
 
@@ -85,9 +87,15 @@ Task object shape (ใช้เหมือนกันทั้งสองเ�
 - Collection `tasks/{taskId}` — หนึ่ง document ต่อหนึ่ง task (โครงสร้างเดียวกับ task object
   ด้านบน) บวกฟิลด์ `updatedAt` (server timestamp, ใช้ตัดสิน last-write-wins) และ
   `lastEditedBy: {uid, name}`
-- `firestore.rules` ปัจจุบันมีแค่กฎเดียว: `allow read, write: if request.auth != null;`
-  บน `tasks/{taskId}` — **ต้อง sign-in (แม้จะเป็น anonymous) เท่านั้น ไม่มี PIN logic ฝั่ง server**
-  (ตั้งใจให้ PIN เป็นแค่ UI-level gate ฝั่ง client)
+- `firestore.rules` อนุญาต `read`/`delete` แค่เงื่อนไข sign-in (แม้จะเป็น anonymous) แต่
+  `create`/`update` ต้องผ่าน `validTask()` เพิ่มเติม: จำกัดเฉพาะ field ที่รู้จัก, จำกัดความยาว
+  string แต่ละ field (`description` ≤500, `notes` ≤2000, `responsible` ≤200,
+  `lastEditedBy.name` ≤60), และบังคับ `textColor` ให้ match regex
+  `^[a-zA-Z0-9:/ _-]*$` เท่านั้น (กัน attribute-breakout payload ที่ฝั่ง client render เป็น
+  HTML attribute) — เป็น defense-in-depth เสริมจาก client-side sanitize ไม่ใช่ตัวแทน
+  **ยังไม่มี PIN logic หรือ per-user ownership ฝั่ง server** (ตั้งใจให้ PIN เป็นแค่ UI-level
+  gate ฝั่ง client ตามเดิม) — ไฟล์นี้เป็นแค่ draft ต้อง publish เข้า Firebase Console เอง
+  ทุกครั้งที่แก้
 
 ## Content-Security-Policy
 
@@ -102,20 +110,55 @@ CSP meta tag ต้อง**เหมือนกันทุกตัวอั�
 
 ถ้าเพิ่ม external origin ใหม่ ต้องแก้ทั้งสองไฟล์พร้อมกัน (ดู [`agents.md`](./agents.md))
 
+**Known limitation:** `script-src` มีทั้ง `'unsafe-inline'` และ `'unsafe-eval'` (จำเป็นสำหรับ
+Tailwind CDN + Chart.js + inline `<script>` เพราะไม่มี build step) — CSP จึงแทบไม่ช่วยกัน XSS
+ได้จริง ชั้นป้องกันหลักคือการ sanitize/escape ฝั่ง client (ดูหัวข้อ "การป้องกัน XSS" ด้านล่าง)
+
+## การป้องกัน XSS ในข้อมูลที่ sync มาจากเครื่องอื่น
+
+ข้อมูล task (`textColor`, `id`, `description`, `notes`, `responsible`, `subtask.text`) มาจาก
+Firestore ได้ทุกเมื่อผ่าน `onSnapshot` — เท่ากับมาจาก**เครื่องอื่นที่ไม่น่าเชื่อถือ**เสมอ (ใครก็ได้
+ที่ sign-in anonymous เขียนเข้า Firestore ได้ ดูหัวข้อ Firestore data model) กฎตอน render:
+
+- **Text content** (`description`, `notes`, `responsible`, `subtask.text`): ต้องผ่าน
+  `this.escapeHTML(...)` เสมอก่อนใส่ใน template string — mobile กับ desktop มี `escapeHTML`
+  คนละ implementation (mobile ใช้ `createTextNode` จึง **ไม่** escape เครื่องหมายคำพูด,
+  desktop escape ครบรวมถึง `"`/`'`) แต่ทั้งคู่ปลอดภัยสำหรับใส่เป็น text content
+- **ค่าที่ใส่เข้า HTML attribute** (`class="${...}"`, `id="${...}"`, `data-*="${...}"`,
+  `for="${...}"`): **ห้าม** interpolate ดิบเด็ดขาด เพราะ `escapeHTML` แบบ mobile ไม่ escape `"`
+  พอที่จะกัน attribute-breakout ได้ — ให้ใช้:
+  - `this.safeColorClass(value, fallback)` สำหรับ `textColor` — allowlist เฉพาะอักขระ CSS class
+    (`^[-a-zA-Z0-9:/ _]+$`) ถ้าไม่ตรงคืนค่า fallback แทน (มีทั้งสองไฟล์ ใกล้ๆ `escapeHTML`)
+  - `this.escapeHTML(...)` (desktop) หรือ `this.escapeAttr(...)` (mobile — ตัวใหม่ที่ escape
+    `"`/`'` ที่ `escapeHTML` ของ mobile ไม่ทำ) สำหรับ `id`/`taskId`/`subtask.id` ที่ใส่ใน
+    attribute เช่น `id=`, `data-task-id=`, `data-subtask-id=`, `for=`
+- ข้อมูลที่มาจาก remote sync (`__SD_APPLY_REMOTE__` ใน desktop, `onRemoteChange` ใน mobile)
+  ต้องผ่านเส้นทาง render เดียวกับข้อมูล local เสมอ — desktop เรียก `_sanitizeTasks()` ก่อน
+  assign ใน `__SD_APPLY_REMOTE__` ด้วย (ไม่ข้ามเหมือนเดิม)
+- ถ้าเพิ่มฟิลด์ใหม่ที่ sync ผ่าน Firestore แล้วต้อง render เป็น attribute ต้องใช้ helper
+  ข้างต้นเสมอ ไม่ใช่แค่ `escapeHTML`
+
 ## สถานะปัจจุบัน / งานที่ยังค้าง
 
-โปรเจกต์ Firebase sync (รายละเอียดเต็มใน `HANDOFF.md`) แบ่งเป็น 6 phase — **Phase 1–4 เสร็จแล้ว**
-(แยก `shared/` module, identity, sync ขาออก, sync ขาเข้า) ส่วนที่ยังไม่ทำ:
+โปรเจกต์ Firebase sync (รายละเอียดเต็มใน `HANDOFF.md`) แบ่งเป็น 6 phase — **Phase 1–6 เสร็จแล้ว
+และยืนยันแล้วว่า realtime sync ทำงานจริงข้ามอุปกรณ์** (ทดสอบ mobile ↔ desktop สำเร็จ):
 
 - **Phase 5 — PIN gate + presence**: ยังไม่มีโค้ด PIN gate ในรีโปนี้เลย (`shared/pin-gate.js`
-  ยังไม่ถูกสร้าง) ไม่มี presence document/heartbeat การลบ/เคลียร์ข้อมูลยังไม่มีการ gate ใดๆ
-- **Phase 6 — Live testing กับ Firebase project จริง**: `shared/firebase-config.js` ใส่ config
-  จริงของโปรเจกต์ `t-dispatcher-465104-r2` แล้ว (คอมมิต `a736f54`) แต่พบว่า `sw.js` cache ไฟล์
-  `shared/*.js` แบบ cache-first ค้างตลอดไปและไม่เคย bump cache version ทำให้เครื่องที่เคยติดตั้ง
-  แอปไปแล้ว (ตอน config ยังเป็น placeholder) ไม่เห็น config ใหม่ — sync จึงยัง fail แบบเงียบ ๆ
-  (แก้แล้ว: bump `CACHE` เป็น `sd-checklist-v3` และเปลี่ยน `shared/*.js` เป็น network-first ใน
-  `sw.js`) ยังต้องตรวจสอบด้วยตัวเองว่า publish `firestore.rules` เข้า console และเปิด
-  Anonymous Auth ในโปรเจกต์จริงแล้วหรือยัง
+  ยังไม่ถูกสร้าง) ไม่มี presence document/heartbeat การลบ/เคลียร์ข้อมูลยังไม่มีการ gate ใดๆ —
+  ยังเป็น TODO ค้างอยู่เหมือนเดิม
+- **Phase 6 — Live testing กับ Firebase project จริง**: เสร็จแล้ว `shared/firebase-config.js`
+  ใส่ config จริงของโปรเจกต์ `t-dispatcher-465104-r2` (คอมมิต `a736f54`), แก้บั๊ก `sw.js` cache
+  ค้าง config เก่า (bump เป็น `sd-checklist-v4`, `shared/*.js` เป็น network-first), และผู้ใช้
+  ยืนยันแล้วว่า Anonymous Auth เปิดอยู่ + Firestore rules publish แล้ว + sync ทำงานจริงระหว่าง
+  มือถือกับ PC
+
+**Security hardening (ตรวจสอบเพิ่มเติมหลัง Phase 6):** พบและแก้แล้ว — stored-XSS ผ่าน
+`textColor`/`id` attribute (ดูหัวข้อด้านบน), Firestore rules เปิดกว้างเกินไปไม่มี validation
+(เพิ่ม `validTask()` แล้ว), desktop เก็บ Gemini API key เป็น plaintext (ย้ายไป `CRYPTO_VAULT`
+แล้ว), service worker ไม่กรอง scheme/ไม่เช็ค `res.ok` ก่อน cache (แก้แล้ว), ชื่อผู้ใช้ไม่จำกัด
+ความยาว (จำกัด 60 ตัวอักษรแล้ว) — รายละเอียดเชิง threat model อยู่ในหัวข้อที่เกี่ยวข้องด้านบน
+ของไฟล์นี้ ไม่มีเอกสารแยกต่างหาก
 
 ก่อนเริ่มงานที่เกี่ยวกับ sync/auth/PIN ให้อ่าน `HANDOFF.md` §4–§7 เพื่อดูการตัดสินใจที่มีอยู่แล้ว
-(เช่น ห้าม hardcode PIN plaintext, ต้องถามผู้ใช้เรื่อง PIN และ Firebase config จริงเอง)
+(เช่น ห้าม hardcode PIN plaintext, ต้องถามผู้ใช้เรื่อง PIN เอง) — ข้อมูลเรื่อง Firebase config
+ใน `HANDOFF.md` อาจเป็นเวอร์ชันเก่าที่ยังพูดถึง placeholder ให้ยึด `context.md` นี้เป็นหลักแทน
