@@ -3,12 +3,12 @@
 // Until replaced, the app runs fully offline/local-only: every Firebase call
 // fails fast and is caught by callers, so nothing here blocks normal use.
 export const firebaseConfig = {
-  apiKey: "REPLACE_WITH_REAL_FIREBASE_CONFIG",
-  authDomain: "REPLACE_WITH_REAL_FIREBASE_CONFIG",
-  projectId: "REPLACE_WITH_REAL_FIREBASE_CONFIG",
-  storageBucket: "REPLACE_WITH_REAL_FIREBASE_CONFIG",
-  messagingSenderId: "REPLACE_WITH_REAL_FIREBASE_CONFIG",
-  appId: "REPLACE_WITH_REAL_FIREBASE_CONFIG",
+  apiKey: "AIzaSyBowajC6YOzC15268kVW_qSe-HB_74yUtg",
+  authDomain: "t-dispatcher-465104-r2.firebaseapp.com",
+  projectId: "t-dispatcher-465104-r2",
+  storageBucket: "t-dispatcher-465104-r2.firebasestorage.app",
+  messagingSenderId: "1010939345148",
+  appId: "1:1010939345148:web:e7724076c75176af3fbf79",
 };
 
 const SDK_VERSION = "10.12.2";
