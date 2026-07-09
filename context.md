@@ -109,10 +109,13 @@ CSP meta tag ต้อง**เหมือนกันทุกตัวอั�
 
 - **Phase 5 — PIN gate + presence**: ยังไม่มีโค้ด PIN gate ในรีโปนี้เลย (`shared/pin-gate.js`
   ยังไม่ถูกสร้าง) ไม่มี presence document/heartbeat การลบ/เคลียร์ข้อมูลยังไม่มีการ gate ใดๆ
-- **Phase 6 — Live testing กับ Firebase project จริง**: `shared/firebase-config.js` ยังเป็น
-  **placeholder** (`apiKey: "REPLACE_WITH_REAL_FIREBASE_CONFIG"`) — sync ทุกอย่างจึงยัง fail-fast
-  และ fallback เป็น local-only เสมอ จนกว่าจะมีการใส่ Firebase config จริงและ publish
-  `firestore.rules` เข้า console แล้วทดสอบ cross-device จริง
+- **Phase 6 — Live testing กับ Firebase project จริง**: `shared/firebase-config.js` ใส่ config
+  จริงของโปรเจกต์ `t-dispatcher-465104-r2` แล้ว (คอมมิต `a736f54`) แต่พบว่า `sw.js` cache ไฟล์
+  `shared/*.js` แบบ cache-first ค้างตลอดไปและไม่เคย bump cache version ทำให้เครื่องที่เคยติดตั้ง
+  แอปไปแล้ว (ตอน config ยังเป็น placeholder) ไม่เห็น config ใหม่ — sync จึงยัง fail แบบเงียบ ๆ
+  (แก้แล้ว: bump `CACHE` เป็น `sd-checklist-v3` และเปลี่ยน `shared/*.js` เป็น network-first ใน
+  `sw.js`) ยังต้องตรวจสอบด้วยตัวเองว่า publish `firestore.rules` เข้า console และเปิด
+  Anonymous Auth ในโปรเจกต์จริงแล้วหรือยัง
 
 ก่อนเริ่มงานที่เกี่ยวกับ sync/auth/PIN ให้อ่าน `HANDOFF.md` §4–§7 เพื่อดูการตัดสินใจที่มีอยู่แล้ว
 (เช่น ห้าม hardcode PIN plaintext, ต้องถามผู้ใช้เรื่อง PIN และ Firebase config จริงเอง)

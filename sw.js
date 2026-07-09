@@ -1,5 +1,5 @@
 /* Service Worker — Check list SD (mobile PWA) */
-const CACHE = 'sd-checklist-v2';
+const CACHE = 'sd-checklist-v3';
 const SHELL = [
   './',
   './interactive_checklist_sd_mobile.html',
@@ -40,6 +40,17 @@ self.addEventListener('fetch', (event) => {
       fetch(req)
         .then((res) => { const cp = res.clone(); caches.open(CACHE).then((c) => c.put(req, cp)); return res; })
         .catch(() => caches.match(req).then((r) => r || caches.match('./interactive_checklist_sd_mobile.html')))
+    );
+    return;
+  }
+
+  // Sync/config modules: network-first, so config or logic changes reach
+  // already-installed clients without waiting on a cache-name bump.
+  if (new URL(req.url).pathname.includes('/shared/')) {
+    event.respondWith(
+      fetch(req)
+        .then((res) => { const cp = res.clone(); caches.open(CACHE).then((c) => c.put(req, cp)); return res; })
+        .catch(() => caches.match(req))
     );
     return;
   }
