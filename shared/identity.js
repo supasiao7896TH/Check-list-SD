@@ -21,7 +21,9 @@ export function getStoredName() {
 }
 
 export function setStoredName(name) {
-  localStorage.setItem(NAME_KEY, (name || "").trim());
+  // Cap length so this attacker-influenceable, synced field can't be abused
+  // (it is written to Firestore and shown on other devices).
+  localStorage.setItem(NAME_KEY, (name || "").trim().slice(0, 60));
 }
 
 export function promptRequired() {

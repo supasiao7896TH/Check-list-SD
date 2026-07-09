@@ -2,7 +2,31 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     match /tasks/{taskId} {
-      allow read, write: if request.auth != null;
+      allow read, delete: if request.auth != null;
+      allow create, update: if request.auth != null && validTask();
+
+      // Server-side validation (defense-in-depth). The client sanitizes too,
+      // but rules stop a direct API caller from writing oversized payloads or
+      // attribute-breakout characters into fields that get rendered as HTML.
+      function validTask() {
+        let d = request.resource.data;
+        return d.keys().hasOnly([
+                 'description', 'datetime', 'actualStartTime', 'actualEndTime',
+                 'notes', 'responsible', 'textColor', 'subtasks',
+                 'completed', 'updatedAt', 'lastEditedBy'
+               ])
+          && d.description is string && d.description.size() <= 500
+          && (!('datetime' in d) || (d.datetime is string && d.datetime.size() <= 40))
+          && (!('notes' in d) || (d.notes is string && d.notes.size() <= 2000))
+          && (!('responsible' in d) || (d.responsible is string && d.responsible.size() <= 200))
+          && (!('textColor' in d) || (d.textColor is string && d.textColor.size() <= 100 && d.textColor.matches('^[a-zA-Z0-9:/ _-]*$')))
+          && (!('subtasks' in d) || (d.subtasks is list && d.subtasks.size() <= 200))
+          && (!('lastEditedBy' in d) || (d.lastEditedBy is map && validName(d.lastEditedBy)));
+      }
+
+      function validName(edited) {
+        return !('name' in edited) || (edited.name is string && edited.name.size() <= 60);
+      }
     }
   }
 }
