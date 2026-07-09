@@ -1,5 +1,6 @@
 <html lang="th" class="light"><head>
     <meta charset="UTF-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://i.postimg.cc; connect-src 'self' https://generativelanguage.googleapis.com https://firestore.googleapis.com https://firebaseinstallations.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com; base-uri 'self'; form-action 'self'">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Check list SD (AI Enhanced)</title>
     <link rel="manifest" href="manifest.webmanifest">
@@ -843,6 +844,32 @@
                 this.startTimers();
                 this.setActiveTab(this.activeTab);
                 this.updateFilterButtons();
+                this.initSync(); // fire-and-forget: never blocks first paint or offline use
+            },
+
+            /** Wire up the Firebase real-time sync bridge (module script sets window.__SD_SYNC__). */
+            initSync() {
+                window.__SD_APP_TASKS__ = () => this.tasks;
+                window.__SD_APPLY_REMOTE__ = (mergedTasks) => {
+                    this.tasks = mergedTasks;
+                    this.render();
+                };
+                if (window.__SD_IDENTITY__ && window.__SD_IDENTITY__.promptRequired()) {
+                    this.openConfirmModal(
+                        'ตั้งชื่อผู้ใช้งาน',
+                        'กรอกชื่อของคุณเพื่อระบุตัวตนเมื่อแก้ไขรายการ (ใช้สำหรับการซิงค์ออนไลน์แบบเรียลไทม์)',
+                        () => {
+                            const input = document.getElementById('confirmInput');
+                            const name = input ? input.value.trim() : '';
+                            if (name && window.__SD_IDENTITY__) window.__SD_IDENTITY__.setStoredName(name);
+                        },
+                        'bg-blue-600 hover:bg-blue-700 text-white',
+                        true,
+                        'ชื่อของคุณ',
+                        undefined,
+                        'บันทึก'
+                    );
+                }
             },
 
             cacheDomElements() {
@@ -1123,6 +1150,7 @@
                     this.showNotification('ข้อผิดพลาด: ไม่สามารถบันทึกข้อมูลได้ อาจเป็นเพราะพื้นที่เก็บข้อมูลเต็ม', 'error');
                 }
                 this.checkCompletionStatus();
+                if (window.__SD_SYNC__) window.__SD_SYNC__.push(this.tasks);
             },
 
             sortTasks() {
@@ -1700,7 +1728,7 @@
             },
 
             handleClearAllChecks(e) {
-                this.openConfirmModal('ล้างสถานะเช็คลิสต์ทั้งหมด?', 'การกระทำนี้จะล้างเครื่องหมายถูกทั้งหมด และรีเซ็ตเวลาทำงานจริง', () => {
+                this.openConfirmModal('ล้างสถานะเช็คลิสต์ทั้งหมด?', 'การกระทำนี้จะล้างเครื่องหมายถูกทั้งหมด และรีเซ็ตเวลาทำงานจริง (จะซิงค์ไปยังทุกเครื่องที่ออนไลน์อยู่)', () => {
                     this.tasks.forEach(task => {
                         task.subtasks.forEach(subtask => subtask.checked = false);
                         task.actualStartTime = null;
@@ -1716,7 +1744,7 @@
 
             handleResetData(e) {
                 const confirmationText = 'รีเซ็ต';
-                this.openConfirmModal('รีเซ็ตข้อมูลทั้งหมด?', `การกระทำนี้จะลบข้อมูลปัจจุบันทั้งหมดและโหลดรายการงานเริ่มต้นเข้ามาใหม่ <strong>ไม่สามารถย้อนกลับได้</strong><br>โปรดพิมพ์ "${confirmationText}" เพื่อยืนยัน:`, () => {
+                this.openConfirmModal('รีเซ็ตข้อมูลทั้งหมด?', `การกระทำนี้จะลบข้อมูลปัจจุบันทั้งหมดและโหลดรายการงานเริ่มต้นเข้ามาใหม่ <strong>ไม่สามารถย้อนกลับได้ และจะซิงค์ไปยังทุกเครื่องที่ออนไลน์อยู่</strong><br>โปรดพิมพ์ "${confirmationText}" เพื่อยืนยัน:`, () => {
                     const input = document.getElementById('confirmInput');
                     if (input && input.value === confirmationText) {
                         localStorage.removeItem(this.STORAGE_KEY);
@@ -2621,6 +2649,21 @@
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
     }
+</script>
+<script type="module">
+    /* Real-time sync bridge — App (classic script) talks to this via window.__SD_*. */
+    import { createSyncEngine } from './shared/sync-engine.js';
+    import * as Identity from './shared/identity.js';
+
+    window.__SD_IDENTITY__ = Identity;
+    window.__SD_SYNC__ = createSyncEngine({
+        getLocalTasks: () => (window.__SD_APP_TASKS__ ? window.__SD_APP_TASKS__() : []),
+        onRemoteChange: (mergedTasks) => {
+            if (window.__SD_APPLY_REMOTE__) window.__SD_APPLY_REMOTE__(mergedTasks);
+        },
+        getIdentity: () => Identity.getIdentity(),
+    });
+    Identity.signInAnon();
 </script>
 
 

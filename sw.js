@@ -7,7 +7,11 @@ const SHELL = [
   './icon-192.png',
   './icon-512.png',
   './icon-maskable-512.png',
-  './apple-touch-icon.png'
+  './apple-touch-icon.png',
+  './shared/firebase-config.js',
+  './shared/identity.js',
+  './shared/app-core.js',
+  './shared/sync-engine.js'
 ];
 
 self.addEventListener('install', (event) => {

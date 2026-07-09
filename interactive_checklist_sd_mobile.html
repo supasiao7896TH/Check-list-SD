@@ -1,6 +1,6 @@
 <html lang="th"><head>
     <meta charset="UTF-8">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://i.postimg.cc; connect-src 'self' https://generativelanguage.googleapis.com; base-uri 'self'; form-action 'self'">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://i.postimg.cc; connect-src 'self' https://generativelanguage.googleapis.com https://firestore.googleapis.com https://firebaseinstallations.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com; base-uri 'self'; form-action 'self'">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Check list SD — Mobile</title>
     <link rel="manifest" href="manifest.webmanifest">
@@ -1835,6 +1835,9 @@
         </div>
     </div>
 <script type="module">
+import { createSyncEngine } from './shared/sync-engine.js';
+import * as Identity from './shared/identity.js';
+
 // --- CONFIGURATION & CONSTANTS ---
 const STORAGE_KEY = 'interactive_SD_WorkInstruction_v1';
 const SETTINGS_KEY = 'interactiveWorkInstruction_settings_SD_v1';
@@ -2071,6 +2074,37 @@ const App = {
         this.resetIdleTimer(IDLE_SCROLL_DELAY_MS); // Start the idle timer on load
         this.showBuildTag();
         this.sweepStaleNotifications(); // clear any stray/baked-in toast immediately
+        this.initSync(); // fire-and-forget: never blocks first paint or offline use
+    },
+
+    /** Wire up Firebase real-time sync. Failures here never block local use. */
+    initSync() {
+        this.syncEngine = createSyncEngine({
+            getLocalTasks: () => this.tasks,
+            onRemoteChange: (mergedTasks) => {
+                this.tasks = mergedTasks;
+                this.render();
+                if (this.activeModal === 'dashboard') this.renderDashboard();
+            },
+            getIdentity: () => Identity.getIdentity(),
+        });
+        Identity.signInAnon();
+        if (Identity.promptRequired()) {
+            this.openConfirmModal(
+                'ตั้งชื่อผู้ใช้งาน',
+                'กรอกชื่อของคุณเพื่อระบุตัวตนเมื่อแก้ไขรายการ (ใช้สำหรับการซิงค์ออนไลน์แบบเรียลไทม์)',
+                () => {
+                    const input = document.getElementById('confirmInput');
+                    const name = input ? input.value.trim() : '';
+                    if (name) Identity.setStoredName(name);
+                },
+                'bg-blue-600 hover:bg-blue-700 text-white',
+                true,
+                'ชื่อของคุณ',
+                undefined,
+                'บันทึก'
+            );
+        }
     },
 
     /** Build the mobile-only chrome: header progress, bottom nav, FAB, tools sheet. */
@@ -2438,6 +2472,7 @@ const App = {
             this.showNotification('Error: Could not save data. Storage might be full.', 'error');
         }
         this.checkCompletionStatus();
+        if (this.syncEngine) this.syncEngine.push(this.tasks);
     },
 
     sortTasks() {
@@ -3122,7 +3157,7 @@ const App = {
      * NEW: Clears actual time data when clearing checks.
      */
     handleClearAllChecks(e) {
-        this.openConfirmModal('ล้างสถานะเช็คลิสต์ทั้งหมด?', 'การกระทำนี้จะล้างเครื่องหมายถูกและเวลาที่บันทึกไว้ทั้งหมด แต่จะไม่ลบงานของคุณ', () => {
+        this.openConfirmModal('ล้างสถานะเช็คลิสต์ทั้งหมด?', 'การกระทำนี้จะล้างเครื่องหมายถูกและเวลาที่บันทึกไว้ทั้งหมด แต่จะไม่ลบงานของคุณ (จะซิงค์ไปยังทุกเครื่องที่ออนไลน์อยู่)', () => {
             this.tasks.forEach(task => {
                 task.actualStartTime = null;
                 task.actualEndTime = null;
@@ -3142,7 +3177,7 @@ const App = {
 
     handleResetData(e) {
         const confirmationText = 'รีเซ็ต';
-        this.openConfirmModal('รีเซ็ตข้อมูลทั้งหมด?', `การกระทำนี้จะลบข้อมูลปัจจุบันทั้งหมดและโหลดรายการงานเริ่มต้นเข้ามาใหม่ <strong>ไม่สามารถย้อนกลับได้</strong><br>โปรดพิมพ์ "${confirmationText}" เพื่อยืนยัน:`, async () => {
+        this.openConfirmModal('รีเซ็ตข้อมูลทั้งหมด?', `การกระทำนี้จะลบข้อมูลปัจจุบันทั้งหมดและโหลดรายการงานเริ่มต้นเข้ามาใหม่ <strong>ไม่สามารถย้อนกลับได้ และจะซิงค์ไปยังทุกเครื่องที่ออนไลน์อยู่</strong><br>โปรดพิมพ์ "${confirmationText}" เพื่อยืนยัน:`, async () => {
             const input = document.getElementById('confirmInput');
             if (input && input.value === confirmationText) {
                 await STORAGE_ENGINE.delete('tasks');
