@@ -257,11 +257,11 @@
                             </svg>
                             รีเซ็ตข้อมูล
                         </button>
-                        <button id="lockPinGateBtn" class="bg-slate-200 hover:bg-slate-300 text-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-200 font-bold py-2 px-4 rounded-lg flex items-center gap-2 transition-colors" title="ล็อกโหมดแก้ไขที่ป้องกันด้วย PIN (ลบ/ล้าง/รีเซ็ต/นำเข้า)">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <button id="editModeBtn" class="bg-slate-200 hover:bg-slate-300 text-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-200 font-bold py-2 px-4 rounded-lg flex items-center gap-2 transition-colors" title="โหมดดูอย่างเดียว/แก้ไข">
+                            <svg id="editModeIcon" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                                 <path fill-rule="evenodd" d="M10 2a4 4 0 00-4 4v2H5a1 1 0 00-1 1v7a2 2 0 002 2h8a2 2 0 002-2v-7a1 1 0 00-1-1h-1V6a4 4 0 00-4-4zm2 6V6a2 2 0 10-4 0v2h4z" clip-rule="evenodd"></path>
                             </svg>
-                            ล็อก PIN
+                            <span id="editModeLabel">ดูอย่างเดียว (ปลดล็อกโหมดแก้ไข)</span>
                         </button>
                     </div>
                     <div id="tab-content-data" class="tab-content flex flex-wrap gap-3 justify-center">
@@ -463,6 +463,20 @@
             <div class="flex items-center justify-center gap-4">
                 <button id="confirmCancelBtn" class="bg-slate-200 hover:bg-slate-300 text-slate-800 dark:bg-slate-600 dark:hover:bg-slate-500 dark:text-slate-200 font-semibold py-2.5 px-6 rounded-full transition-colors">ยกเลิก</button>
                 <button id="confirmOkBtn" class="font-semibold py-2.5 px-6 rounded-full transition-colors bg-blue-600 hover:bg-blue-700 text-white">ยืนยัน</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- PIN Modal (unlock edit mode — quick UI-level gate, see agents.md) -->
+    <div id="pinModalBackdrop" class="modal-backdrop bg-black/30 dark:bg-black/50 fixed inset-0 z-40 backdrop-blur-sm hidden"></div>
+    <div id="pinModal" role="dialog" aria-modal="true" aria-labelledby="pinModalTitle" class="modal bg-slate-50 dark:bg-slate-800 rounded-3xl shadow-2xl w-11/12 md:w-1/3 fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 border dark:border-slate-700 hidden">
+        <div class="p-8 text-center">
+            <h3 id="pinModalTitle" class="text-xl font-bold mt-4">ปลดล็อกโหมดแก้ไข</h3>
+            <p class="text-slate-500 dark:text-slate-400 mt-2 mb-6">กรอกรหัส PIN ที่ทีมงานใช้ร่วมกันเพื่อแก้ไข/ติ๊กงานได้ ไม่ทราบ PIN ก็ยังดูความคืบหน้าแบบเรียลไทม์ได้ตามปกติ</p>
+            <input type="password" id="pinInput" inputmode="numeric" class="w-full text-center border rounded-xl p-2 bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600" placeholder="รหัส PIN">
+            <div class="flex items-center justify-center gap-4 mt-6">
+                <button id="pinCancelBtn" class="bg-slate-200 hover:bg-slate-300 text-slate-800 dark:bg-slate-600 dark:hover:bg-slate-500 dark:text-slate-200 font-semibold py-2.5 px-6 rounded-full transition-colors">ยกเลิก</button>
+                <button id="pinSubmitBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 px-6 rounded-full transition-colors">ปลดล็อก</button>
             </div>
         </div>
     </div>
@@ -913,7 +927,8 @@
             overdueNotificationState: {},
             apiKey: null,
             settings: {
-                soundEnabled: true
+                soundEnabled: true,
+                adminUnlocked: false
             },
             dom: {},
             activeModal: null,
@@ -931,6 +946,7 @@
             // =========================================================================
             init() {
                 this.cacheDomElements();
+                localStorage.removeItem('sd_pin_gate_unlocked'); // cleanup: obsolete flag from the previous narrow gate
                 this.loadApiKey();
                 this.loadSettings();
                 this.loadVoices();
@@ -980,7 +996,14 @@
                 this.dom.addNewTaskBtn = document.getElementById('addNewTaskBtn');
                 this.dom.clearAllChecksBtn = document.getElementById('clearAllChecksBtn');
                 this.dom.resetDataBtn = document.getElementById('resetDataBtn');
-                this.dom.lockPinGateBtn = document.getElementById('lockPinGateBtn');
+                this.dom.editModeBtn = document.getElementById('editModeBtn');
+                this.dom.editModeLabel = document.getElementById('editModeLabel');
+                this.dom.editModeIcon = document.getElementById('editModeIcon');
+                this.dom.pinModalBackdrop = document.getElementById('pinModalBackdrop');
+                this.dom.pinModal = document.getElementById('pinModal');
+                this.dom.pinInput = document.getElementById('pinInput');
+                this.dom.pinCancelBtn = document.getElementById('pinCancelBtn');
+                this.dom.pinSubmitBtn = document.getElementById('pinSubmitBtn');
                 this.dom.editModalBackdrop = document.getElementById('editModalBackdrop');
                 this.dom.editModal = document.getElementById('editModal');
                 this.dom.editTaskForm = document.getElementById('editTaskForm');
@@ -1063,7 +1086,13 @@
                 this.dom.addNewTaskBtn.addEventListener('click', (e) => this.openEditModal(null, e.currentTarget));
                 this.dom.clearAllChecksBtn.addEventListener('click', (e) => this.handleClearAllChecks(e));
                 this.dom.resetDataBtn.addEventListener('click', (e) => this.handleResetData(e));
-                this.dom.lockPinGateBtn.addEventListener('click', () => this.lockPinGate());
+                this.dom.editModeBtn.addEventListener('click', (e) => this.handleEditModeToggle(e.currentTarget));
+                this.dom.pinCancelBtn.addEventListener('click', this.closePinModal.bind(this));
+                this.dom.pinSubmitBtn.addEventListener('click', this.handlePinSubmit.bind(this));
+                this.dom.pinModalBackdrop.addEventListener('click', this.closePinModal.bind(this));
+                this.dom.pinInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') { e.preventDefault(); this.handlePinSubmit(); }
+                });
                 this.dom.taskListEl.addEventListener('click', this.handleTaskListClick.bind(this));
                 this.dom.taskListEl.addEventListener('change', this.handleSubtaskChange.bind(this));
                 this.dom.editTaskForm.addEventListener('submit', this.handleEditFormSubmit.bind(this));
@@ -1278,6 +1307,7 @@
 
                 this.applyHighlight(this.currentHighlightedTaskId, false);
                 this.checkCompletionStatus();
+                this.updateEditModeUI();
             },
 
             getFilteredTasks() {
@@ -1396,7 +1426,7 @@
                             </div>
                             ` : ''}
                         </div>
-                        <div class="flex gap-2 self-start md:self-center flex-shrink-0">
+                        <div class="flex gap-2 self-start md:self-center flex-shrink-0 ${this.isEditingAllowed() ? '' : this.CSS_CLASSES.hidden}">
                             <button class="edit-btn p-2 text-slate-400 hover:text-blue-500 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" title="แก้ไขงาน">
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" /><path fill-rule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clip-rule="evenodd" /></svg>
                             </button>
@@ -1418,6 +1448,7 @@
             renderSubtasks(subtasks, taskId) {
                 let html = '';
                 if (!Array.isArray(subtasks)) return '';
+                const disabledAttr = this.isEditingAllowed() ? '' : 'disabled';
 
                 subtasks.forEach(subtask => {
                     const subItemRegex = /^[\s]*[\-\*]\s/;
@@ -1428,7 +1459,7 @@
                     const escTaskId = this.escapeHTML(taskId);
                     html += `
                         <div class="subtask-item flex items-start gap-3 p-2 hover:bg-slate-100 dark:hover:bg-slate-800/50 rounded-lg ${paddingClass}">
-                            <input type="checkbox" id="${subId}" data-task-id="${escTaskId}" data-subtask-id="${subId}" class="h-5 w-5 mt-1 flex-shrink-0 rounded-md border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500" ${subtask.checked ? 'checked' : ''}>
+                            <input type="checkbox" id="${subId}" data-task-id="${escTaskId}" data-subtask-id="${subId}" class="h-5 w-5 mt-1 flex-shrink-0 rounded-md border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500" ${subtask.checked ? 'checked' : ''} ${disabledAttr}>
                             <label for="${subId}" class="flex-1 ${textColorClass}">${this.escapeHTML(subtask.text.replace(subItemRegex, ''))}</label>
                         </div>
                     `;
@@ -1587,37 +1618,74 @@
                 this.lastFocusedElement = null;
             },
 
-            // Gates destructive actions (delete/clear/reset/import) behind a shared
-            // PIN. UI-only — see shared/pin-gate.js. Unlock persists in localStorage
-            // per device until locked again, so this only prompts once per device.
-            runWithPinGate(action, openerElement) {
-                if (window.__SD_PIN__.isUnlocked()) {
-                    action();
-                    return;
-                }
-                this.openConfirmModal(
-                    'ปลดล็อกด้วยรหัส PIN',
-                    'การลบ/ล้าง/นำเข้าข้อมูลต้องปลดล็อกด้วยรหัส PIN ก่อน',
-                    async () => {
-                        const pin = document.getElementById('confirmInput')?.value ?? '';
-                        if (await window.__SD_PIN__.verifyPin(pin)) {
-                            window.__SD_PIN__.unlock();
-                            this.showNotification('ปลดล็อกแล้ว', 'success');
-                            action();
-                        } else {
-                            this.showNotification('รหัส PIN ไม่ถูกต้อง', 'error');
-                        }
-                    },
-                    'bg-blue-600 hover:bg-blue-700 text-white', true, 'PIN', openerElement, 'ปลดล็อก'
-                );
+            // Quick, UI-only edit-mode gate (see agents.md/context.md for the
+            // explicit limitation: this is not enforced by firestore.rules).
+            // Every mutating handler must check this before touching this.tasks.
+            isEditingAllowed() {
+                return !!this.settings.adminUnlocked;
             },
 
-            lockPinGate() {
-                window.__SD_PIN__.lock();
-                this.showNotification('ล็อกโหมดแก้ไขที่ป้องกันด้วย PIN แล้ว', 'info');
+            openPinModal(openerElement) {
+                this.dom.pinInput.value = '';
+                this.openModal('pin', openerElement);
+            },
+
+            closePinModal() {
+                this.closeActiveModal();
+            },
+
+            async handleEditModeToggle(openerElement) {
+                if (this.isEditingAllowed()) {
+                    this.settings.adminUnlocked = false;
+                    this.saveSettings();
+                    this.render();
+                    this.showNotification('เปลี่ยนเป็นโหมดดูอย่างเดียวแล้ว', 'info');
+                } else {
+                    this.openPinModal(openerElement);
+                }
+            },
+
+            async handlePinSubmit() {
+                const pin = this.dom.pinInput.value.trim();
+                if (!pin) {
+                    this.showNotification('กรุณากรอกรหัส PIN', 'error');
+                    return;
+                }
+                let ok;
+                try {
+                    ok = await window.__SD_PIN__.verifyPin(pin);
+                } catch (error) {
+                    console.error('PIN verification failed:', error);
+                    this.showNotification('เกิดข้อผิดพลาด กรุณารีเฟรชหน้าใหม่แล้วลองอีกครั้ง', 'error');
+                    return;
+                }
+                if (ok) {
+                    this.settings.adminUnlocked = true;
+                    this.saveSettings();
+                    this.closePinModal();
+                    this.render();
+                    this.showNotification('ปลดล็อกโหมดแก้ไขแล้ว', 'success');
+                } else {
+                    this.dom.pinInput.value = '';
+                    this.showNotification('รหัส PIN ไม่ถูกต้อง', 'error');
+                }
+            },
+
+            /** Toggles visibility of every mutating control based on isEditingAllowed(). */
+            updateEditModeUI() {
+                const allowed = this.isEditingAllowed();
+                if (this.dom.editModeLabel) {
+                    this.dom.editModeLabel.textContent = allowed ? 'โหมดแก้ไข (กดเพื่อล็อก)' : 'ดูอย่างเดียว (ปลดล็อกโหมดแก้ไข)';
+                }
+                [this.dom.addNewTaskBtn, this.dom.clearAllChecksBtn, this.dom.resetDataBtn, this.dom.importDataBtn]
+                    .forEach(btn => { if (btn) btn.classList.toggle(this.CSS_CLASSES.hidden, !allowed); });
             },
 
             openEditModal(taskId = null, openerElement) {
+                if (!this.isEditingAllowed()) {
+                    this.showNotification('โหมดดูอย่างเดียว: กรุณาปลดล็อกด้วยรหัส PIN ก่อนแก้ไขข้อมูล', 'error');
+                    return;
+                }
                 this.openModal('edit', openerElement);
                 this.dom.editTaskForm.reset();
                 this.dom.subtaskListEditor.innerHTML = '';
@@ -1713,6 +1781,10 @@
 
             handleEditFormSubmit(e) {
                 e.preventDefault();
+                if (!this.isEditingAllowed()) {
+                    this.showNotification('โหมดดูอย่างเดียว: กรุณาปลดล็อกด้วยรหัส PIN ก่อนแก้ไขข้อมูล', 'error');
+                    return;
+                }
                 const id = this.dom.editTaskIdInput.value;
                 const description = this.dom.taskDescriptionInput.value.trim();
                 const newDatetime = this.dom.taskDateTimeInput.value;
@@ -1808,21 +1880,28 @@
                 }
                 const deleteBtn = e.target.closest('.delete-btn');
                 if (deleteBtn) {
+                    if (!this.isEditingAllowed()) {
+                        this.showNotification('โหมดดูอย่างเดียว: กรุณาปลดล็อกด้วยรหัส PIN ก่อนแก้ไขข้อมูล', 'error');
+                        return;
+                    }
                     const taskId = deleteBtn.closest('.task-card').dataset.taskId;
-                    this.runWithPinGate(() => {
-                        this.openConfirmModal('ยืนยันการลบงาน', 'คุณแน่ใจหรือไม่ว่าต้องการลบงานหลักนี้และงานย่อยทั้งหมด?', () => {
-                            this.tasks = this.tasks.filter(t => t.id !== taskId);
-                            this.saveTasks();
-                            this.render();
-                            this.resetHighlightDelay();
-                        }, undefined, false, '', deleteBtn);
-                    }, deleteBtn);
+                    this.openConfirmModal('ยืนยันการลบงาน', 'คุณแน่ใจหรือไม่ว่าต้องการลบงานหลักนี้และงานย่อยทั้งหมด?', () => {
+                        this.tasks = this.tasks.filter(t => t.id !== taskId);
+                        this.saveTasks();
+                        this.render();
+                        this.resetHighlightDelay();
+                    }, undefined, false, '', deleteBtn);
                 }
             },
 
             handleSubtaskChange(e) {
                 const input = e.target;
                 if (input.matches('input[type="checkbox"]')) {
+                    if (!this.isEditingAllowed()) {
+                        input.checked = !input.checked; // revert any UI change that slipped through
+                        this.showNotification('โหมดดูอย่างเดียว: กรุณาปลดล็อกด้วยรหัส PIN ก่อนแก้ไขข้อมูล', 'error');
+                        return;
+                    }
                     const {
                         taskId,
                         subtaskId
@@ -1871,38 +1950,42 @@
             },
 
             handleClearAllChecks(e) {
-                this.runWithPinGate(() => {
-                    this.openConfirmModal('ล้างสถานะเช็คลิสต์ทั้งหมด?', 'การกระทำนี้จะล้างเครื่องหมายถูกทั้งหมด และรีเซ็ตเวลาทำงานจริง (จะซิงค์ไปยังทุกเครื่องที่ออนไลน์อยู่)', () => {
-                        this.tasks.forEach(task => {
-                            task.subtasks.forEach(subtask => subtask.checked = false);
-                            task.actualStartTime = null;
-                            task.actualEndTime = null;
-                        });
-                        this.saveTasks();
-                        this.resetAllNotifications();
-                        this.render();
-                        this.showNotification('ล้างสถานะทั้งหมดแล้ว', 'info');
-                        this.resetHighlightDelay();
-                    }, 'bg-blue-600 hover:bg-blue-700 text-white', false, '', e.currentTarget);
-                }, e.currentTarget);
+                if (!this.isEditingAllowed()) {
+                    this.showNotification('โหมดดูอย่างเดียว: กรุณาปลดล็อกด้วยรหัส PIN ก่อนแก้ไขข้อมูล', 'error');
+                    return;
+                }
+                this.openConfirmModal('ล้างสถานะเช็คลิสต์ทั้งหมด?', 'การกระทำนี้จะล้างเครื่องหมายถูกทั้งหมด และรีเซ็ตเวลาทำงานจริง (จะซิงค์ไปยังทุกเครื่องที่ออนไลน์อยู่)', () => {
+                    this.tasks.forEach(task => {
+                        task.subtasks.forEach(subtask => subtask.checked = false);
+                        task.actualStartTime = null;
+                        task.actualEndTime = null;
+                    });
+                    this.saveTasks();
+                    this.resetAllNotifications();
+                    this.render();
+                    this.showNotification('ล้างสถานะทั้งหมดแล้ว', 'info');
+                    this.resetHighlightDelay();
+                }, 'bg-blue-600 hover:bg-blue-700 text-white', false, '', e.currentTarget);
             },
 
             handleResetData(e) {
-                this.runWithPinGate(() => {
-                    const confirmationText = 'รีเซ็ต';
-                    this.openConfirmModal('รีเซ็ตข้อมูลทั้งหมด?', `การกระทำนี้จะลบข้อมูลปัจจุบันทั้งหมดและโหลดรายการงานเริ่มต้นเข้ามาใหม่ <strong>ไม่สามารถย้อนกลับได้ และจะซิงค์ไปยังทุกเครื่องที่ออนไลน์อยู่</strong><br>โปรดพิมพ์ "${confirmationText}" เพื่อยืนยัน:`, () => {
-                        const input = document.getElementById('confirmInput');
-                        if (input && input.value === confirmationText) {
-                            localStorage.removeItem(this.STORAGE_KEY);
-                            this.loadTasks();
-                            this.render();
-                            this.showNotification('รีเซ็ตข้อมูลเป็นค่าเริ่มต้นแล้ว', 'info');
-                            this.resetHighlightDelay();
-                        } else {
-                            this.showNotification('ข้อความยืนยันไม่ถูกต้อง', 'error');
-                        }
-                    }, undefined, true, `พิมพ์ '${confirmationText}' ที่นี่`, e.currentTarget);
-                }, e.currentTarget);
+                if (!this.isEditingAllowed()) {
+                    this.showNotification('โหมดดูอย่างเดียว: กรุณาปลดล็อกด้วยรหัส PIN ก่อนแก้ไขข้อมูล', 'error');
+                    return;
+                }
+                const confirmationText = 'รีเซ็ต';
+                this.openConfirmModal('รีเซ็ตข้อมูลทั้งหมด?', `การกระทำนี้จะลบข้อมูลปัจจุบันทั้งหมดและโหลดรายการงานเริ่มต้นเข้ามาใหม่ <strong>ไม่สามารถย้อนกลับได้ และจะซิงค์ไปยังทุกเครื่องที่ออนไลน์อยู่</strong><br>โปรดพิมพ์ "${confirmationText}" เพื่อยืนยัน:`, () => {
+                    const input = document.getElementById('confirmInput');
+                    if (input && input.value === confirmationText) {
+                        localStorage.removeItem(this.STORAGE_KEY);
+                        this.loadTasks();
+                        this.render();
+                        this.showNotification('รีเซ็ตข้อมูลเป็นค่าเริ่มต้นแล้ว', 'info');
+                        this.resetHighlightDelay();
+                    } else {
+                        this.showNotification('ข้อความยืนยันไม่ถูกต้อง', 'error');
+                    }
+                }, undefined, true, `พิมพ์ '${confirmationText}' ที่นี่`, e.currentTarget);
             },
 
             handleConfirmOk() {
@@ -1922,6 +2005,11 @@
             },
 
             handleImport(event) {
+                if (!this.isEditingAllowed()) {
+                    this.showNotification('โหมดดูอย่างเดียว: กรุณาปลดล็อกด้วยรหัส PIN ก่อนแก้ไขข้อมูล', 'error');
+                    event.target.value = '';
+                    return;
+                }
                 const file = event.target.files[0];
                 if (!file) return;
                 const importBtn = this.dom.importDataBtn; // capture before async onload (event.currentTarget becomes null)
@@ -1931,16 +2019,14 @@
                         const importedTasks = JSON.parse(e.target.result);
                         if (!Array.isArray(importedTasks)) throw new Error('Invalid file format: Not an array.');
 
-                        this.runWithPinGate(() => {
-                            this.openConfirmModal('ยืนยันการนำเข้าข้อมูล', `พบข้อมูล ${importedTasks.length} รายการในไฟล์นี้ การนำเข้าจะเขียนทับข้อมูลปัจจุบันทั้งหมด คุณแน่ใจหรือไม่?`, () => {
-                                this.tasks = this._sanitizeTasks(importedTasks);
-                                this.saveTasks();
-                                this.resetAllNotifications();
-                                this.render();
-                                this.showNotification('นำเข้าข้อมูลสำเร็จ!', 'success');
-                                this.resetHighlightDelay();
-                            }, 'bg-blue-600 hover:bg-blue-700 text-white', false, '', importBtn);
-                        }, importBtn);
+                        this.openConfirmModal('ยืนยันการนำเข้าข้อมูล', `พบข้อมูล ${importedTasks.length} รายการในไฟล์นี้ การนำเข้าจะเขียนทับข้อมูลปัจจุบันทั้งหมด คุณแน่ใจหรือไม่?`, () => {
+                            this.tasks = this._sanitizeTasks(importedTasks);
+                            this.saveTasks();
+                            this.resetAllNotifications();
+                            this.render();
+                            this.showNotification('นำเข้าข้อมูลสำเร็จ!', 'success');
+                            this.resetHighlightDelay();
+                        }, 'bg-blue-600 hover:bg-blue-700 text-white', false, '', importBtn);
                     } catch (error) {
                         console.error("Import Error:", error);
                         this.showNotification(`เกิดข้อผิดพลาด: ${error.message}`, 'error');
@@ -2138,9 +2224,19 @@
             loadSettings() {
                 const settingsJSON = localStorage.getItem(this.SETTINGS_KEY);
                 if (settingsJSON) {
+                    const stored = JSON.parse(settingsJSON);
                     this.settings = { ...this.settings,
-                        ...JSON.parse(settingsJSON)
+                        ...stored
                     };
+                    // Migration: a device that was already active (has a stored
+                    // identity name) before edit-mode gating existed is trusted
+                    // and stays unlocked; a genuinely new device with no prior
+                    // identity defaults to locked/view-only via the settings
+                    // object literal above.
+                    if (!('adminUnlocked' in stored)) {
+                        this.settings.adminUnlocked = !!(window.__SD_IDENTITY__ && window.__SD_IDENTITY__.getStoredName());
+                        this.saveSettings();
+                    }
                 }
                 this.updateSoundIcon();
             },

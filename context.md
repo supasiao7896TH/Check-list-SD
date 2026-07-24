@@ -93,10 +93,10 @@ Task object shape (ใช้เหมือนกันทั้งสองเ�
   `lastEditedBy.name` ≤60), และบังคับ `textColor` ให้ match regex
   `^[a-zA-Z0-9:/ _-]*$` เท่านั้น (กัน attribute-breakout payload ที่ฝั่ง client render เป็น
   HTML attribute) — เป็น defense-in-depth เสริมจาก client-side sanitize ไม่ใช่ตัวแทน
-  **ไม่มี PIN logic หรือ per-user ownership ฝั่ง server** (ตั้งใจ — PIN gate ที่ implement แล้ว
-  ใน `shared/pin-gate.js` เป็นแค่ UI-level เท่านั้น client ที่เรียก Firestore SDK ตรงๆ
-  bypass การเช็ค PIN นี้ได้เสมอ) — ไฟล์นี้เป็นแค่ draft ต้อง publish เข้า Firebase Console เอง
-  ทุกครั้งที่แก้
+  **ไม่มี PIN logic หรือ per-user ownership ฝั่ง server** (ตั้งใจ — edit-mode gate ที่ implement
+  แล้ว (`App.isEditingAllowed()` + `settings.adminUnlocked`, ดู "Edit mode gate" ด้านล่าง) เป็นแค่
+  UI-level เท่านั้น client ที่เรียก Firestore SDK ตรงๆ bypass การเช็คนี้ได้เสมอ) — ไฟล์นี้เป็นแค่
+  draft ต้อง publish เข้า Firebase Console เองทุกครั้งที่แก้
 
 ## Content-Security-Policy
 
@@ -139,17 +139,45 @@ Firestore ได้ทุกเมื่อผ่าน `onSnapshot` — เท�
 - ถ้าเพิ่มฟิลด์ใหม่ที่ sync ผ่าน Firestore แล้วต้อง render เป็น attribute ต้องใช้ helper
   ข้างต้นเสมอ ไม่ใช่แค่ `escapeHTML`
 
+## Edit mode gate (view-only until PIN-unlocked)
+
+ทั้งสองไฟล์ implement pattern เดียวกับโปรเจกต์พี่น้อง Check-list-SU เป๊ะๆ (ตรวจสอบกับซอร์สจริง
+ของ SU แล้ว ไม่ใช่แค่ paraphrase) เพื่อให้ copy ไปใช้กับแอปอื่นได้ง่าย:
+
+- **`shared/pin-gate.js`** — เก็บแค่ `verifyPin(candidate)` (SHA-256 hash compare) ไม่มี state
+  ใดๆ ในไฟล์นี้ — ต่างจากเวอร์ชันแรกที่เคยเก็บ unlock flag ไว้ใน `localStorage` โดยตรง
+- **State**: `settings.adminUnlocked` (default `false`) — persist ผ่าน `loadSettings()`/
+  `saveSettings()` ปกติของแต่ละไฟล์ (desktop: `localStorage`, mobile: `STORAGE_ENGINE`/IndexedDB)
+  ไม่มี state ร่วมข้ามไฟล์ เหมือน `soundEnabled` เดิม
+- **`App.isEditingAllowed()`** — จุดเช็คกลางจุดเดียว `!!this.settings.adminUnlocked`
+- **PIN modal แยกต่างหาก** (`pinModal`/`pinInput`/`pinSubmitBtn`/`pinCancelBtn`) ไม่ใช้
+  `openConfirmModal` ร่วม — เปิดผ่าน `handleEditModeToggle()` เมื่อล็อกอยู่; ปุ่มเดียวกัน
+  (`editModeBtn`/`editModeLabel`) กดตอนปลดล็อกอยู่แล้ว = ล็อกทันทีไม่ต้องใช้ PIN
+- **`updateEditModeUI()`** เรียกท้าย `render()` ทุกครั้ง — sync label ("โหมดแก้ไข (กดเพื่อล็อก)" /
+  "ดูอย่างเดียว (ปลดล็อกโหมดแก้ไข)") และซ่อนปุ่ม add/clear/reset/import เมื่อล็อกอยู่
+- **จุด gate ทุก mutating handler** (~7 จุดต่อไฟล์): `openEditModal` (ครอบทั้งปุ่มเพิ่มงานใหม่และ
+  แก้ไขงานรายตัว), `handleEditFormSubmit`, `handleImport`, delete branch ของ
+  `handleTaskListClick`, `handleSubtaskChange` (revert checkbox กลับถ้าหลุด bypass มาได้),
+  `handleClearAllChecks`, `handleResetData`
+- **Render-time**: ปุ่ม edit/delete รายงานถูกซ่อน (`CSS_CLASSES.hidden`) และ checkbox ใส่
+  `disabled` เมื่อ `isEditingAllowed()` เป็น false — ไม่ใช่แค่บล็อกตอนคลิกเหมือนเดิม
+- **Migration**: `loadSettings()` เช็คว่า record เก่าไม่มี key `adminUnlocked` → เครื่องที่เคยใช้
+  งานมาก่อน (มีชื่อ identity เก็บไว้แล้ว) จะได้ unlocked อัตโนมัติ กัน lockout กะทันหันสำหรับ
+  ผู้ใช้เดิม เครื่องใหม่ที่ไม่เคยใช้จะ default เป็น locked
+- Desktop bridge `verifyPin` ผ่าน `window.__SD_PIN__` (module script แยกจาก classic script หลัก)
+  ส่วน mobile import `shared/pin-gate.js` ตรงๆ (module เดียวทั้งไฟล์) — ต่างจาก SU ที่โหลด PIN
+  logic ผ่าน classic `<script src="shared/app-core.js">` เพราะ SD ยึด ES module convention ของ
+  ตัวเองอยู่แล้ว (agents.md rule 3)
+
 ## สถานะปัจจุบัน / งานที่ยังค้าง
 
 โปรเจกต์ Firebase sync (รายละเอียดเต็มใน `HANDOFF.md`) แบ่งเป็น 6 phase — **Phase 1–6 เสร็จแล้ว
 และยืนยันแล้วว่า realtime sync ทำงานจริงข้ามอุปกรณ์** (ทดสอบ mobile ↔ desktop สำเร็จ):
 
-- **Phase 5a — PIN gate**: เสร็จแล้ว `shared/pin-gate.js` (SHA-256 hash compare,
-  `isUnlocked()`/`unlock()`/`lock()` ผูกกับ `localStorage` key `sd_pin_gate_unlocked`, ไม่มี
-  server round-trip) ผูกผ่าน `App.runWithPinGate()` หน้าตัว handler ลบ task / ล้างสถานะทั้งหมด /
-  รีเซ็ตข้อมูล / นำเข้าข้อมูล ทั้งสองไฟล์ — ขอบเขตแคบกว่าที่ `HANDOFF.md` §5 ร่างไว้ตอนแรก:
-  การติ๊กเช็คลิสต์และเพิ่ม/แก้ task ยังไม่ต้องปลดล็อก (ตั้งใจ ไม่ให้กระทบการใช้งานปกติ) ปุ่ม
-  "ล็อก PIN" ใหม่ในทั้งสองไฟล์ใช้ล็อกกลับด้วยตนเอง
+- **Phase 5a — Edit mode gate (PIN)**: เสร็จแล้ว เต็มขอบเขต ตรงกับ Check-list-SU (ดูหัวข้อ
+  "Edit mode gate" ด้านบนสำหรับรายละเอียด) — gate ครอบคลุมทุก mutating action ไม่ใช่แค่ 4 อย่าง
+  ทำลาย (เวอร์ชันแรกที่เคย implement แบบขอบเขตแคบถูกแทนที่ทั้งหมดตามที่ผู้ใช้แก้ไข ให้ตรงกับ
+  SU 100%)
 - **Phase 5b — Presence**: ยังไม่มี presence document/heartbeat — ยังเป็น TODO ค้างอยู่
   (แยกจาก PIN gate ด้านบน)
 - **Phase 6 — Live testing กับ Firebase project จริง**: เสร็จแล้ว `shared/firebase-config.js`

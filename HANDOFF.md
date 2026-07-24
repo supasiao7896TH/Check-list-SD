@@ -288,18 +288,43 @@ PIN check server-side — deletion protection is UI-only, per the user's decisio
       Prefer Firestore data over local seed once the first snapshot arrives;
       local storage remains the fast first-paint + offline fallback.
 
-- [x] **Phase 5a — PIN gate.** `shared/pin-gate.js` built: SHA-256 hash
-      constant (PIN asked directly from the user in-session, never committed
-      in plaintext), `verifyPin()`/`isUnlocked()`/`unlock()`/`lock()`, local
-      "unlocked" flag in `localStorage` (`sd_pin_gate_unlocked`), no server
-      round-trip. Wired via `App.runWithPinGate()` in front of delete-task,
-      clear-all-checks, reset-data, and import-data in both HTML files (desktop
-      bridges it onto `window.__SD_PIN__`; mobile imports it directly as an ES
-      module). Scope is intentionally narrower than originally sketched here:
-      checking off items and add/edit-task stay ungated — only the four
-      destructive actions above require the PIN. A manual "ล็อก PIN" button
-      re-locks a device on demand. `firestore.rules` (auth-required, no PIN
-      logic server-side) already existed pre-Phase-5 and needed no changes.
+- [x] **Phase 5a — PIN gate ("Edit mode" toggle).** `shared/pin-gate.js`
+      built: SHA-256 hash constant (PIN asked directly from the user
+      in-session, never committed in plaintext), `verifyPin()` only — no
+      state lives in this module. State lives in `settings.adminUnlocked`
+      (persisted via each file's own `loadSettings()`/`saveSettings()`,
+      default `false`). Mirrors the sibling Check-list-SU app's design
+      exactly (verified against SU's actual source, not a paraphrase) so the
+      same pattern can be copied to future apps:
+      - `App.isEditingAllowed()` — single central check, `!!this.settings.adminUnlocked`.
+      - A dedicated PIN modal (`pinModal`/`pinInput`/`pinSubmitBtn`/`pinCancelBtn`,
+        separate from the generic `openConfirmModal`), opened via
+        `handleEditModeToggle()` when locked; the same toggle button
+        (`editModeBtn`/`editModeLabel`) locks immediately with no PIN when
+        clicked while unlocked.
+      - `updateEditModeUI()` runs at the end of every `render()`, syncing the
+        toggle label and hiding the toolbar add/clear/reset/import buttons
+        when locked.
+      - Every mutating entry point is gated: `openEditModal` (covers both
+        add-new-task and per-task edit), `handleEditFormSubmit`, `handleImport`,
+        the delete branch of `handleTaskListClick`, `handleSubtaskChange`
+        (reverts the checkbox if a disabled one is bypassed),
+        `handleClearAllChecks`, `handleResetData` — ~7 choke points per file.
+      - Per-task edit/delete buttons are hidden and checkboxes `disabled` at
+        render time when locked, not just blocked at click-time.
+      - `loadSettings()` grandfathers in devices that were already active
+        (have a stored identity name) before this feature shipped, so nobody
+        already using the app gets suddenly locked out.
+      Desktop bridges `verifyPin` onto `window.__SD_PIN__`; mobile imports
+      `shared/pin-gate.js` directly as an ES module — SD's own established
+      module convention, unlike SU which loads its PIN logic via a classic
+      (non-module) `<script src="shared/app-core.js">`. `firestore.rules`
+      (auth-required, no PIN logic server-side) already existed pre-Phase-5
+      and needed no changes.
+      **Superseded design note:** an earlier version of this session scoped
+      the gate narrowly (only delete/clear/reset/import, prompting only at
+      click-time) — that was replaced with the above full-scope design per
+      explicit user correction, to match Check-list-SU exactly.
 - [ ] **Phase 5b — Presence.** Lightweight presence writes/heartbeat
       (`presence/{uid}` doc, `onDisconnect()`) — still outstanding, not part
       of the PIN-gate work above.

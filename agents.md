@@ -81,5 +81,11 @@
 (ไม่เคย commit plaintext) ถ้างานต้องเปลี่ยน PIN ในอนาคตก็ยังต้องถามผู้ใช้ใหม่ทุกครั้งเหมือนเดิม
 ห้ามเดาหรือ hardcode ขึ้นมาเอง — สิ่งที่ยังไม่ทำคือ presence/heartbeat (Phase 5b)
 
+**Edit-mode gate naming/scope ตั้งใจให้ตรงกับ Check-list-SU เป๊ะๆ** (`App.isEditingAllowed()`,
+`settings.adminUnlocked`, `editModeBtn`/`pinModal`, gate ครอบทุก mutating handler ไม่ใช่แค่
+delete/clear/reset/import) — เคยมีเวอร์ชันขอบเขตแคบกว่านี้ (gate แค่ 4 ปุ่มทำลายข้อมูล ใช้
+`App.runWithPinGate()`) แต่ถูกแทนที่ทั้งหมดแล้วตามคำแก้ไขของผู้ใช้ ถ้าจะไปทำแอปอื่นต่อ ให้ copy
+pattern จากไฟล์นี้ (หรือ Check-list-SU) ไม่ใช่จาก git history เก่าของ commit ก่อนหน้า
+
 ถ้างานเกี่ยวข้องกับการเปลี่ยน/เพิ่ม field ที่ sync ผ่าน Firestore ให้อ่านกฎข้อ 6 ด้านบนก่อน
 (untrusted data + ต้อง sanitize ทั้งฝั่ง client และเพิ่ม validation ใน `firestore.rules`)
