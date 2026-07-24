@@ -2,7 +2,8 @@
 
 อ่าน [`context.md`](./context.md) ก่อนเพื่อเข้าใจสถาปัตยกรรม และดู [`HANDOFF.md`](./HANDOFF.md)
 ถ้างานเกี่ยวข้องกับ Firebase sync / identity / PIN gate (มีรายละเอียดการตัดสินใจที่ทำไว้แล้ว
-และ TODO ที่ยังค้าง — Phase 5 PIN gate + presence, Phase 6 live testing)
+และ TODO ที่ยังค้าง — Phase 5b presence ยังไม่ทำ; Phase 5a PIN gate กับ Phase 6 live testing
+เสร็จแล้ว)
 
 ## กฎหลัก
 
@@ -75,9 +76,10 @@
 อ่าน `HANDOFF.md` §3–§7 ก่อนเสมอ — มีบันทึกการตัดสินใจของผู้ใช้ไว้แล้ว (เลือก Firebase,
 ไม่มี real login แค่ anonymous auth + ชื่อที่กรอกเอง, PIN เป็น client-side gate เท่านั้นไม่ enforce
 ที่ security rules ฯลฯ) เพื่อไม่ต้องถามคำถามเดิมซ้ำกับผู้ใช้ **Firebase config จริงถูกให้มาแล้ว**
-(โปรเจกต์ `t-dispatcher-465104-r2`, ใช้งานจริงตั้งแต่คอมมิต `a736f54`) แต่ **ค่า PIN จริงยังไม่เคย
-ถูกให้มา** และ PIN gate (Phase 5) ยังไม่ถูกสร้างเลย — ถ้างานเกี่ยวข้องกับ PIN ต้องถามผู้ใช้เองใน
-เซสชันที่ทำงานเรื่องนี้ ห้ามเดาหรือ hardcode ขึ้นมาเอง
+(โปรเจกต์ `t-dispatcher-465104-r2`, ใช้งานจริงตั้งแต่คอมมิต `a736f54`) **PIN gate (Phase 5a)
+เสร็จแล้ว** — `shared/pin-gate.js` เก็บแค่ SHA-256 hash ของ PIN ที่ผู้ใช้ให้มาตรงๆ ในเซสชัน
+(ไม่เคย commit plaintext) ถ้างานต้องเปลี่ยน PIN ในอนาคตก็ยังต้องถามผู้ใช้ใหม่ทุกครั้งเหมือนเดิม
+ห้ามเดาหรือ hardcode ขึ้นมาเอง — สิ่งที่ยังไม่ทำคือ presence/heartbeat (Phase 5b)
 
 ถ้างานเกี่ยวข้องกับการเปลี่ยน/เพิ่ม field ที่ sync ผ่าน Firestore ให้อ่านกฎข้อ 6 ด้านบนก่อน
 (untrusted data + ต้อง sanitize ทั้งฝั่ง client และเพิ่ม validation ใน `firestore.rules`)

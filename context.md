@@ -93,8 +93,9 @@ Task object shape (ใช้เหมือนกันทั้งสองเ�
   `lastEditedBy.name` ≤60), และบังคับ `textColor` ให้ match regex
   `^[a-zA-Z0-9:/ _-]*$` เท่านั้น (กัน attribute-breakout payload ที่ฝั่ง client render เป็น
   HTML attribute) — เป็น defense-in-depth เสริมจาก client-side sanitize ไม่ใช่ตัวแทน
-  **ยังไม่มี PIN logic หรือ per-user ownership ฝั่ง server** (ตั้งใจให้ PIN เป็นแค่ UI-level
-  gate ฝั่ง client ตามเดิม) — ไฟล์นี้เป็นแค่ draft ต้อง publish เข้า Firebase Console เอง
+  **ไม่มี PIN logic หรือ per-user ownership ฝั่ง server** (ตั้งใจ — PIN gate ที่ implement แล้ว
+  ใน `shared/pin-gate.js` เป็นแค่ UI-level เท่านั้น client ที่เรียก Firestore SDK ตรงๆ
+  bypass การเช็ค PIN นี้ได้เสมอ) — ไฟล์นี้เป็นแค่ draft ต้อง publish เข้า Firebase Console เอง
   ทุกครั้งที่แก้
 
 ## Content-Security-Policy
@@ -143,9 +144,14 @@ Firestore ได้ทุกเมื่อผ่าน `onSnapshot` — เท�
 โปรเจกต์ Firebase sync (รายละเอียดเต็มใน `HANDOFF.md`) แบ่งเป็น 6 phase — **Phase 1–6 เสร็จแล้ว
 และยืนยันแล้วว่า realtime sync ทำงานจริงข้ามอุปกรณ์** (ทดสอบ mobile ↔ desktop สำเร็จ):
 
-- **Phase 5 — PIN gate + presence**: ยังไม่มีโค้ด PIN gate ในรีโปนี้เลย (`shared/pin-gate.js`
-  ยังไม่ถูกสร้าง) ไม่มี presence document/heartbeat การลบ/เคลียร์ข้อมูลยังไม่มีการ gate ใดๆ —
-  ยังเป็น TODO ค้างอยู่เหมือนเดิม
+- **Phase 5a — PIN gate**: เสร็จแล้ว `shared/pin-gate.js` (SHA-256 hash compare,
+  `isUnlocked()`/`unlock()`/`lock()` ผูกกับ `localStorage` key `sd_pin_gate_unlocked`, ไม่มี
+  server round-trip) ผูกผ่าน `App.runWithPinGate()` หน้าตัว handler ลบ task / ล้างสถานะทั้งหมด /
+  รีเซ็ตข้อมูล / นำเข้าข้อมูล ทั้งสองไฟล์ — ขอบเขตแคบกว่าที่ `HANDOFF.md` §5 ร่างไว้ตอนแรก:
+  การติ๊กเช็คลิสต์และเพิ่ม/แก้ task ยังไม่ต้องปลดล็อก (ตั้งใจ ไม่ให้กระทบการใช้งานปกติ) ปุ่ม
+  "ล็อก PIN" ใหม่ในทั้งสองไฟล์ใช้ล็อกกลับด้วยตนเอง
+- **Phase 5b — Presence**: ยังไม่มี presence document/heartbeat — ยังเป็น TODO ค้างอยู่
+  (แยกจาก PIN gate ด้านบน)
 - **Phase 6 — Live testing กับ Firebase project จริง**: เสร็จแล้ว `shared/firebase-config.js`
   ใส่ config จริงของโปรเจกต์ `t-dispatcher-465104-r2` (คอมมิต `a736f54`), แก้บั๊ก `sw.js` cache
   ค้าง config เก่า (bump เป็น `sd-checklist-v4`, `shared/*.js` เป็น network-first), และผู้ใช้

@@ -288,14 +288,21 @@ PIN check server-side — deletion protection is UI-only, per the user's decisio
       Prefer Firestore data over local seed once the first snapshot arrives;
       local storage remains the fast first-paint + offline fallback.
 
-- [ ] **Phase 5 — Security rules + presence + PIN gate.** Write
-      `firestore.rules` (auth-required, no PIN logic server-side). Add
-      lightweight presence writes/heartbeat. Build `shared/pin-gate.js`: SHA-256
-      hash constant (from the PIN the user gives you — see "Things you must ask
-      the user" above), `gate(action)` helper that prompts for PIN, hashes
-      input, compares, and on success sets a local "unlocked" flag
-      (localStorage, no server round-trip). Wire this in front of existing
-      delete/clear/reset handlers in both HTML files.
+- [x] **Phase 5a — PIN gate.** `shared/pin-gate.js` built: SHA-256 hash
+      constant (PIN asked directly from the user in-session, never committed
+      in plaintext), `verifyPin()`/`isUnlocked()`/`unlock()`/`lock()`, local
+      "unlocked" flag in `localStorage` (`sd_pin_gate_unlocked`), no server
+      round-trip. Wired via `App.runWithPinGate()` in front of delete-task,
+      clear-all-checks, reset-data, and import-data in both HTML files (desktop
+      bridges it onto `window.__SD_PIN__`; mobile imports it directly as an ES
+      module). Scope is intentionally narrower than originally sketched here:
+      checking off items and add/edit-task stay ungated — only the four
+      destructive actions above require the PIN. A manual "ล็อก PIN" button
+      re-locks a device on demand. `firestore.rules` (auth-required, no PIN
+      logic server-side) already existed pre-Phase-5 and needed no changes.
+- [ ] **Phase 5b — Presence.** Lightweight presence writes/heartbeat
+      (`presence/{uid}` doc, `onDisconnect()`) — still outstanding, not part
+      of the PIN-gate work above.
 
 - [ ] **Phase 6 — Testing (blocked on real Firebase project).** Everything above
       can be built and verified locally against the placeholder config (module
