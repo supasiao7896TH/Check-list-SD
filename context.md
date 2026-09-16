@@ -164,12 +164,17 @@ Firestore ได้ทุกเมื่อผ่าน `onSnapshot` — เท�
   (`editModeBtn`/`editModeLabel`) กดตอนปลดล็อกอยู่แล้ว = ล็อกทันทีไม่ต้องใช้ PIN
 - **`updateEditModeUI()`** เรียกท้าย `render()` ทุกครั้ง — sync label ("โหมดแก้ไข (กดเพื่อล็อก)" /
   "ดูอย่างเดียว (ปลดล็อกโหมดแก้ไข)") และซ่อนปุ่ม add/clear/reset/import เมื่อล็อกอยู่
-- **จุด gate ทุก mutating handler** (~7 จุดต่อไฟล์): `openEditModal` (ครอบทั้งปุ่มเพิ่มงานใหม่และ
-  แก้ไขงานรายตัว), `handleEditFormSubmit`, `handleImport`, delete branch ของ
-  `handleTaskListClick`, `handleSubtaskChange` (revert checkbox กลับถ้าหลุด bypass มาได้),
-  `handleClearAllChecks`, `handleResetData`
-- **Render-time**: ปุ่ม edit/delete รายงานถูกซ่อน (`CSS_CLASSES.hidden`) และ checkbox ใส่
-  `disabled` เมื่อ `isEditingAllowed()` เป็น false — ไม่ใช่แค่บล็อกตอนคลิกเหมือนเดิม
+- **จุด gate ทุก mutating handler ยกเว้น checkbox** (~6 จุดต่อไฟล์): `openEditModal` (ครอบทั้งปุ่ม
+  เพิ่มงานใหม่และแก้ไขงานรายตัว), `handleEditFormSubmit`, `handleImport`, delete branch ของ
+  `handleTaskListClick`, `handleClearAllChecks`, `handleResetData`
+- **Render-time**: ปุ่ม edit/delete รายงานถูกซ่อน (`CSS_CLASSES.hidden`) เมื่อ `isEditingAllowed()`
+  เป็น false
+- **ข้อยกเว้นตั้งใจ: ติ๊ก checkbox ไม่ถูก gate** — `handleSubtaskChange` (ทั้ง subtask checkbox และ
+  checkbox "เสร็จสิ้นงานนี้" ของ mobile) ไม่เช็ค `isEditingAllowed()` เลย และ checkbox ไม่ใส่
+  `disabled` ตอน render ไม่ว่าจะล็อกอยู่หรือไม่ — เพราะผู้ใช้จริงบ่นว่าต้องปลดล็อกทุกครั้งแค่จะติ๊ก
+  งานที่ทำเสร็จระหว่างกะ ทำให้ใช้งานลำบากเกินไป (feedback หลัง Phase 5a ใช้งานจริง) ส่วนการ
+  เพิ่ม/แก้ไข/ลบงาน, ล้างสถานะ, รีเซ็ต, นำเข้าข้อมูล ยังคงต้อง PIN เหมือนเดิมทั้งหมด — นี่คือ
+  จุดต่างเดียวจาก pattern ของ Check-list-SU ที่เหลือทั้งหมด (เจตนา ไม่ใช่ implement คลาดเคลื่อน)
 - **Migration**: `loadSettings()` เช็คว่า record เก่าไม่มี key `adminUnlocked` → เครื่องที่เคยใช้
   งานมาก่อน (มีชื่อ identity เก็บไว้แล้ว) จะได้ unlocked อัตโนมัติ กัน lockout กะทันหันสำหรับ
   ผู้ใช้เดิม เครื่องใหม่ที่ไม่เคยใช้จะ default เป็น locked

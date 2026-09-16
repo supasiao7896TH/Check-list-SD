@@ -2633,7 +2633,7 @@ const App = {
         const taskCompleteHTML = task.subtasks.length === 0 ? `
             <div class="m-sub">
                 <input type="checkbox" id="task-complete-${escTaskId}" data-task-id="${escTaskId}" data-task-complete="true"
-                    class="m-cbx" ${task.completed ? 'checked' : ''} ${this.isEditingAllowed() ? '' : 'disabled'}>
+                    class="m-cbx" ${task.completed ? 'checked' : ''}>
                 <label for="task-complete-${escTaskId}" class="m-sublabel m-sublabel-strong">เสร็จสิ้นงานนี้</label>
             </div>` : '';
 
@@ -2707,7 +2707,6 @@ const App = {
 
     renderSubtasks(subtasks, taskId) {
         const escTaskId = this.escapeAttr(taskId);
-        const disabledAttr = this.isEditingAllowed() ? '' : 'disabled';
         return subtasks.map(subtask => {
             const isSubItem = subtask.text.trim().startsWith('-');
             const indentClass = isSubItem ? 'm-indent' : '';
@@ -2715,7 +2714,7 @@ const App = {
             const subColor = this.safeColorClass(subtask.textColor, '');
             return `
             <div class="m-sub ${indentClass}">
-                <input type="checkbox" id="${subId}" data-task-id="${escTaskId}" data-subtask-id="${subId}" class="m-cbx" ${subtask.checked ? 'checked' : ''} ${disabledAttr}>
+                <input type="checkbox" id="${subId}" data-task-id="${escTaskId}" data-subtask-id="${subId}" class="m-cbx" ${subtask.checked ? 'checked' : ''}>
                 <label for="${subId}" class="m-sublabel ${subColor}">${this.escapeHTML(subtask.text.replace(/^[\s]*[\-\*]\s/, ''))}</label>
             </div>
             `;
@@ -3203,11 +3202,6 @@ const App = {
     handleSubtaskChange(e) {
         const input = e.target;
         if (input.matches('input[type="checkbox"]')) {
-            if (!this.isEditingAllowed()) {
-                input.checked = !input.checked; // revert any UI change that slipped through
-                this.showNotification('โหมดดูอย่างเดียว: กรุณาปลดล็อกด้วยรหัส PIN ก่อนแก้ไขข้อมูล', 'error');
-                return;
-            }
             if (input.dataset.taskComplete) {
                 const taskId = input.dataset.taskId;
                 const task = this.tasks.find(t => t.id === taskId);

@@ -1448,7 +1448,6 @@
             renderSubtasks(subtasks, taskId) {
                 let html = '';
                 if (!Array.isArray(subtasks)) return '';
-                const disabledAttr = this.isEditingAllowed() ? '' : 'disabled';
 
                 subtasks.forEach(subtask => {
                     const subItemRegex = /^[\s]*[\-\*]\s/;
@@ -1459,7 +1458,7 @@
                     const escTaskId = this.escapeHTML(taskId);
                     html += `
                         <div class="subtask-item flex items-start gap-3 p-2 hover:bg-slate-100 dark:hover:bg-slate-800/50 rounded-lg ${paddingClass}">
-                            <input type="checkbox" id="${subId}" data-task-id="${escTaskId}" data-subtask-id="${subId}" class="h-5 w-5 mt-1 flex-shrink-0 rounded-md border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500" ${subtask.checked ? 'checked' : ''} ${disabledAttr}>
+                            <input type="checkbox" id="${subId}" data-task-id="${escTaskId}" data-subtask-id="${subId}" class="h-5 w-5 mt-1 flex-shrink-0 rounded-md border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500" ${subtask.checked ? 'checked' : ''}>
                             <label for="${subId}" class="flex-1 ${textColorClass}">${this.escapeHTML(subtask.text.replace(subItemRegex, ''))}</label>
                         </div>
                     `;
@@ -1897,11 +1896,6 @@
             handleSubtaskChange(e) {
                 const input = e.target;
                 if (input.matches('input[type="checkbox"]')) {
-                    if (!this.isEditingAllowed()) {
-                        input.checked = !input.checked; // revert any UI change that slipped through
-                        this.showNotification('โหมดดูอย่างเดียว: กรุณาปลดล็อกด้วยรหัส PIN ก่อนแก้ไขข้อมูล', 'error');
-                        return;
-                    }
                     const {
                         taskId,
                         subtaskId
