@@ -14,8 +14,8 @@
 2. **Mobile กับ Desktop คือคนละไฟล์ที่ตั้งใจแยกกัน — ห้าม merge เป็นไฟล์เดียว.**
    `interactive_checklist_sd_mobile.html` เก็บ task ด้วย IndexedDB (`STORAGE_ENGINE`) กับ
    `interactive_checklist_sd_app.html` เก็บ task ด้วย `localStorage` มี persistence engine,
-   layout, และ state ของตัวเองแยกกัน (ทั้งสองไฟล์มี `STORAGE_ENGINE`/`CRYPTO_VAULT` ของตัวเอง
-   แยก DB name กัน ใช้เก็บ Gemini API key แบบเข้ารหัสเหมือนกันทั้งคู่แล้ว — ไม่ใช่จุดต่างอีกต่อไป)
+   layout, และ state ของตัวเองแยกกัน (desktop ไม่มี `STORAGE_ENGINE` เลยหลังตัด Gemini AI ออก —
+   ไฟล์นั้นเคยมีไว้แค่เก็บ Gemini API key เท่านั้น ดู agents.md ข้อ 5)
    การแก้ UI/feature เฉพาะเวอร์ชันให้แก้แค่ไฟล์นั้น ถ้า logic เป็น cross-cutting จริงๆ
    (data model, identity, sync) ให้ขึ้น module ใหม่ใน `shared/` แล้ว import เข้าทั้งสองไฟล์
    อย่า copy-paste logic เดียวกันซ้ำสองที่
@@ -39,9 +39,11 @@
      **publishable key เปิดเผยได้ปกติ** ไม่ใช่ secret — ตอนนี้ใส่ค่าจริงของโปรเจกต์
      `t-dispatcher-465104-r2` แล้ว (ไม่ใช่ placeholder) ถ้าจะเปลี่ยนไปโปรเจกต์อื่นต้องถาม
      ผู้ใช้ให้ค่าจริงมาก่อนเสมอ ห้ามเดาหรือใส่ค่าเองโดยไม่ได้รับจากผู้ใช้
-   - Gemini API key ของผู้ใช้ (คนละตัวกับ Firebase config) ต้องเก็บผ่าน `CRYPTO_VAULT`
-     (AES-GCM ใน IndexedDB) เท่านั้น **ห้าม**เก็บ plaintext ใน `localStorage` อีก — ทั้ง mobile
-     และ desktop ใช้ pattern นี้แล้ว (ดู `CRYPTO_VAULT`/`STORAGE_ENGINE` ในแต่ละไฟล์)
+   - **ไม่มี Gemini AI/API key ในโปรเจกต์นี้อีกแล้ว** (ตัดออกทั้งหมดวันที่ 2569-09-16 ตามคำขอ
+     ผู้ใช้ — ไม่ต้องการพึ่ง API key ที่มีความเสี่ยงเรื่องค่าใช้จ่าย) **ห้ามเพิ่มฟีเจอร์ที่เรียก
+     Gemini หรือ AI API อื่นใดกลับเข้ามาโดยไม่ถามผู้ใช้ก่อนเสมอ** แม้จะดูเป็นทางแก้ที่สะดวกก็ตาม
+     ถ้าต้องการสรุป/เรียบเรียงข้อมูลอัตโนมัติ ให้ใช้ template string จากข้อมูลที่มีอยู่แล้วแทน
+     (ดูตัวอย่าง `buildHandoverReport`/`buildShutdownReport` ในทั้งสองไฟล์ HTML)
 
 6. **ข้อมูลที่ sync ผ่าน Firestore ต้องถือว่าไม่น่าเชื่อถือเสมอ (untrusted).** เพราะ Firestore
    ใช้ anonymous auth + เปิดให้ authenticated client ใดๆ เขียนได้ (ดู `firestore.rules` และ

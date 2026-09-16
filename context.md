@@ -33,11 +33,8 @@ Check-list-SD เป็นเว็บแอปเช็คลิสต์สำ
 ทั้งสองไฟล์ HTML เป็น **คนละชุดโค้ดที่ดูแลแยกกันโดยเจตนา** ไม่ใช่โค้ดชุดเดียวกัน:
 
 - **Mobile** เก็บ task ข้อมูลด้วย **IndexedDB** ผ่าน wrapper เอง (`STORAGE_ENGINE`, DB name
-  `interactive_SD_DB_mobile`) และมี `CRYPTO_VAULT` เข้ารหัส Gemini API key ด้วย AES-GCM
-- **Desktop** เก็บ task ข้อมูลด้วย **`localStorage`** ธรรมดา แต่ Gemini API key ใช้
-  `CRYPTO_VAULT`/`STORAGE_ENGINE` แบบเดียวกับ mobile แล้ว (DB name แยกกัน
-  `interactive_SD_DB_desktop`) — เดิมเก็บเป็น plaintext ใน `localStorage`, แก้แล้วพร้อม migrate
-  key เก่าอัตโนมัติตอนโหลดแอปครั้งแรกหลังอัปเดต (ดู `loadApiKey()` ใน `interactive_checklist_sd_app.html`)
+  `interactive_SD_DB_mobile`)
+- **Desktop** เก็บ task ข้อมูลด้วย **`localStorage`** ธรรมดา
 - ทั้งสองไฟล์มี global singleton `App` object ของตัวเอง จัดการ state แบบ imperative
   (mutate แล้วเรียก `this.render()` เอง ไม่มี virtual DOM/diffing)
 - มีแค่ logic ที่ cross-cutting จริงๆ (data normalization, identity, sync) เท่านั้นที่ถูกแยกไปอยู่ใน `shared/`
@@ -114,7 +111,7 @@ CSP meta tag ต้อง**เหมือนกันทุกตัวอั�
 
 - `script-src`: `cdn.tailwindcss.com`, `cdn.jsdelivr.net` (Chart.js), `www.gstatic.com`
   (Firebase modular SDK โหลดผ่าน dynamic `import()`, ไม่มี bundler)
-- `connect-src`: `generativelanguage.googleapis.com` (Gemini API), `firestore.googleapis.com`,
+- `connect-src`: `firestore.googleapis.com`,
   `firebaseinstallations.googleapis.com`, `identitytoolkit.googleapis.com`,
   `securetoken.googleapis.com` (Firestore + Anonymous Auth)
 
@@ -202,10 +199,19 @@ Firestore ได้ทุกเมื่อผ่าน `onSnapshot` — เท�
 
 **Security hardening (ตรวจสอบเพิ่มเติมหลัง Phase 6):** พบและแก้แล้ว — stored-XSS ผ่าน
 `textColor`/`id` attribute (ดูหัวข้อด้านบน), Firestore rules เปิดกว้างเกินไปไม่มี validation
-(เพิ่ม `validTask()` แล้ว), desktop เก็บ Gemini API key เป็น plaintext (ย้ายไป `CRYPTO_VAULT`
-แล้ว), service worker ไม่กรอง scheme/ไม่เช็ค `res.ok` ก่อน cache (แก้แล้ว), ชื่อผู้ใช้ไม่จำกัด
-ความยาว (จำกัด 60 ตัวอักษรแล้ว) — รายละเอียดเชิง threat model อยู่ในหัวข้อที่เกี่ยวข้องด้านบน
-ของไฟล์นี้ ไม่มีเอกสารแยกต่างหาก
+(เพิ่ม `validTask()` แล้ว), service worker ไม่กรอง scheme/ไม่เช็ค `res.ok` ก่อน cache (แก้แล้ว),
+ชื่อผู้ใช้ไม่จำกัดความยาว (จำกัด 60 ตัวอักษรแล้ว) — รายละเอียดเชิง threat model อยู่ในหัวข้อที่
+เกี่ยวข้องด้านบนของไฟล์นี้ ไม่มีเอกสารแยกต่างหาก
+
+**AI/Gemini ถูกตัดออกทั้งหมด (2569-09-16):** ฟีเจอร์ "สร้างสรุปส่งกะ"/"สร้างรายงานสรุป" เปลี่ยนจาก
+เรียก Gemini API เป็น template string ล้วน ๆ (ข้อมูลเดิมทุกอย่าง แค่ไม่ผ่าน AI เรียบเรียง) ส่วน
+"วิเคราะห์โดย AI" ในช่องบันทึกปัญหา และ "วิเคราะห์ภาพรวมโปรเจกต์จาก AI" ใน Dashboard ถูกลบทิ้งไปเลย
+(ไม่มีทาง replicate ด้วย template เพราะเป็นการวิเคราะห์/ตัดสินใจเชิงคุณภาพจาก AI จริง ไม่ใช่แค่
+เรียบเรียงข้อมูลตายตัว) — เหตุผล: ผู้ใช้ไม่ต้องการพึ่ง Gemini API key อีกต่อไป (ความเสี่ยงเรื่อง
+ค่าใช้จ่าย/quota) ผลคือ `CRYPTO_VAULT`, `callGemini()`, และ UI/state ที่เกี่ยวกับ API key ถูกลบออก
+จากทั้งสองไฟล์ทั้งหมด — desktop ไม่มี `STORAGE_ENGINE`/`CRYPTO_VAULT` เหลืออยู่เลย (เคยมีไว้แค่เก็บ
+Gemini key), ส่วน mobile ยังมี `STORAGE_ENGINE` อยู่ (ใช้เก็บ tasks/settings จริง) แต่ไม่มี
+`CRYPTO_VAULT` แล้ว
 
 ก่อนเริ่มงานที่เกี่ยวกับ sync/auth/PIN ให้อ่าน `HANDOFF.md` §4–§7 เพื่อดูการตัดสินใจที่มีอยู่แล้ว
 (เช่น ห้าม hardcode PIN plaintext, ต้องถามผู้ใช้เรื่อง PIN เอง) — ข้อมูลเรื่อง Firebase config
