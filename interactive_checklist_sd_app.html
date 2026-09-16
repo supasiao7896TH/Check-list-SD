@@ -1136,6 +1136,13 @@
                         this.closeActiveModal();
                     }
                 });
+
+                // Reset the auto-scroll delay on any user activity, matching the
+                // mobile version, so auto-scroll never yanks the page away while
+                // the user is actively scrolling/reading/clicking around.
+                ['scroll', 'mousemove', 'keydown', 'click'].forEach(eventType => {
+                    window.addEventListener(eventType, () => this.resetHighlightDelay());
+                });
             },
 
             loadVoices() {
