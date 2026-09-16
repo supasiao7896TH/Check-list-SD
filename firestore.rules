@@ -8,6 +8,17 @@ service cloud.firestore {
       // Server-side validation (defense-in-depth). The client sanitizes too,
       // but rules stop a direct API caller from writing oversized payloads or
       // attribute-breakout characters into fields that get rendered as HTML.
+      //
+      // KNOWN GAP: Firestore Rules functions cannot loop ("Functions can
+      // contain only a single return statement... cannot execute loops" —
+      // firebase.google.com/docs/firestore/security/rules-conditions), so
+      // there is no way to validate each subtasks[i] element here (e.g. its
+      // own textColor, which is rendered the same attribute-unsafe way as the
+      // task-level one). Closing this would require a Cloud Function, which
+      // this project deliberately does not have (static PWA, no backend —
+      // see agents.md rule 1). Client-side sanitize (escapeHTML/escapeAttr/
+      // safeColorClass on every subtask field, see context.md) is therefore
+      // the ONLY defense for subtask content, not a backstop to this rule.
       function validTask() {
         let d = request.resource.data;
         return d.keys().hasOnly([

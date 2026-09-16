@@ -1,7 +1,10 @@
-// Firebase config — REPLACE the values below with your real project's config
-// (Firebase console > Project settings > General > Your apps > SDK setup).
-// Until replaced, the app runs fully offline/local-only: every Firebase call
-// fails fast and is caught by callers, so nothing here blocks normal use.
+// Firebase config for project t-dispatcher-465104-r2 (live since commit a736f54).
+// This is a publishable client key, not a secret — safe to expose (see agents.md
+// rule 5). If pointing this at a different Firebase project, get the real config
+// from the user first; never guess or fill in placeholder values.
+// isPlaceholderConfig() below still guards the (no longer expected) placeholder
+// case: if apiKey is ever reset to it, every Firebase call fails fast and is
+// caught by callers, so the app keeps working fully offline/local-only.
 export const firebaseConfig = {
   apiKey: "AIzaSyBowajC6YOzC15268kVW_qSe-HB_74yUtg",
   authDomain: "t-dispatcher-465104-r2.firebaseapp.com",

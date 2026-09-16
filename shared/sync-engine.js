@@ -1,7 +1,14 @@
 import { getFirebaseApp, SDK_BASE } from "./firebase-config.js";
 import { mergeTaskLastWriteWins } from "./app-core.js";
 
-const READY_TIMEOUT_MS = 4000;
+// Pure stall-safety fallback, NOT a normal-latency accommodator: markReady()
+// already fires as soon as the first onSnapshot (success or error) or an
+// init() failure resolves, which is the expected path on every real network.
+// This timeout only covers the rare case where onSnapshot never calls back at
+// all. It must stay well above normal first-snapshot latency — a short value
+// here would let push() fire before the first snapshot merge, overwriting
+// remote data with an un-merged local copy.
+const READY_TIMEOUT_MS = 15000;
 
 function stripMeta(task) {
   const { updatedAt, lastEditedBy, ...rest } = task;

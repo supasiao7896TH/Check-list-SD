@@ -1505,7 +1505,7 @@
 
             applyHighlight(taskId, shouldScroll = true) {
                 if (this.currentHighlightedTaskId) {
-                    const oldEl = document.querySelector(`.task-card[data-task-id="${this.currentHighlightedTaskId}"]`);
+                    const oldEl = document.querySelector(`.task-card[data-task-id="${CSS.escape(this.currentHighlightedTaskId)}"]`);
                     if (oldEl) {
                         oldEl.classList.remove(
                             this.CSS_CLASSES.highlightedPending,

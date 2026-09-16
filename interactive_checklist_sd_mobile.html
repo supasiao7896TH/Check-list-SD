@@ -2767,7 +2767,7 @@ const App = {
         });
 
         if (this.highlightedTaskId) {
-            const el = this.dom.taskListEl.querySelector(`.task-card[data-task-id="${this.highlightedTaskId}"]`);
+            const el = this.dom.taskListEl.querySelector(`.task-card[data-task-id="${CSS.escape(this.highlightedTaskId)}"]`);
             const task = this.tasks.find(t => t.id === this.highlightedTaskId);
 
             if (el && task) {
@@ -2787,7 +2787,7 @@ const App = {
 
     triggerAutoScroll() {
         if (this.highlightedTaskId) {
-            const el = this.dom.taskListEl.querySelector(`.task-card[data-task-id="${this.highlightedTaskId}"]`);
+            const el = this.dom.taskListEl.querySelector(`.task-card[data-task-id="${CSS.escape(this.highlightedTaskId)}"]`);
             if (el) {
                 el.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }

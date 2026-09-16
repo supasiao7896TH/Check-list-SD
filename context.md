@@ -90,13 +90,22 @@ Task object shape (ใช้เหมือนกันทั้งสองเ�
 - `firestore.rules` อนุญาต `read`/`delete` แค่เงื่อนไข sign-in (แม้จะเป็น anonymous) แต่
   `create`/`update` ต้องผ่าน `validTask()` เพิ่มเติม: จำกัดเฉพาะ field ที่รู้จัก, จำกัดความยาว
   string แต่ละ field (`description` ≤500, `notes` ≤2000, `responsible` ≤200,
-  `lastEditedBy.name` ≤60), และบังคับ `textColor` ให้ match regex
+  `lastEditedBy.name` ≤60), และบังคับ `textColor` (ระดับ task) ให้ match regex
   `^[a-zA-Z0-9:/ _-]*$` เท่านั้น (กัน attribute-breakout payload ที่ฝั่ง client render เป็น
   HTML attribute) — เป็น defense-in-depth เสริมจาก client-side sanitize ไม่ใช่ตัวแทน
   **ไม่มี PIN logic หรือ per-user ownership ฝั่ง server** (ตั้งใจ — edit-mode gate ที่ implement
   แล้ว (`App.isEditingAllowed()` + `settings.adminUnlocked`, ดู "Edit mode gate" ด้านล่าง) เป็นแค่
   UI-level เท่านั้น client ที่เรียก Firestore SDK ตรงๆ bypass การเช็คนี้ได้เสมอ) — ไฟล์นี้เป็นแค่
   draft ต้อง publish เข้า Firebase Console เองทุกครั้งที่แก้
+  - **Known gap (ทำไม่ได้ด้วย rules language เอง ไม่ใช่มองข้าม):** `validTask()` ตรวจแค่ว่า
+    `subtasks` เป็น list ขนาด ≤200 เท่านั้น **ไม่ validate โครงสร้างภายในของแต่ละ
+    `subtask` เลย** (`text`/`textColor`/`checked`) เพราะ Firestore Rules functions loop
+    ผ่าน array ไม่ได้ ("cannot execute loops" — เอกสาร
+    [rules-conditions](https://firebase.google.com/docs/firestore/security/rules-conditions))
+    ทางเดียวที่จะปิดช่องนี้ได้คือเพิ่ม Cloud Function ตรวจ server-side ซึ่งขัดกับ agents.md
+    ข้อ 1 (static PWA ไม่มี backend) โดยตั้งใจไม่ทำ — **client-side sanitize
+    (`escapeHTML`/`escapeAttr`/`safeColorClass` ต่อทุก subtask field) จึงเป็นแนวป้องกันเดียว
+    สำหรับเนื้อหาระดับ subtask ไม่ใช่ backstop ของ rules ข้อนี้**
 
 ## Content-Security-Policy
 
